@@ -1,3 +1,7 @@
+-- ⚠️  NE PAS EXÉCUTER SUR SUPABASE (ni dans l'éditeur SQL du tableau de
+-- bord) : ce fichier crée de faux comptes et se lance avec psql sur un
+-- Postgres local, via « npm run test:rls ».
+
 -- Tests des règles de sécurité. Chaque bloc échoue bruyamment (exception)
 -- si une règle laisse passer ce qu'elle doit bloquer, ou l'inverse.
 

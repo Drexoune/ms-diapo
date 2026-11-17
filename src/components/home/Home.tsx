@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, FilePlus2, Loader2, LogOut, ShieldCheck, Trash2 } from "lucide-react";
+import { Copy, FilePlus2, Loader2, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { Confirm } from "@/components/ui/Modal";
 import { FluidThumb, SlideThumb } from "@/components/slide/SlideView";
 import { useApp } from "@/lib/app";
-import { data } from "@/lib/backend";
+import { data, enterGuest } from "@/lib/backend";
 import { setLocalStaff } from "@/lib/backend/local";
 import { cloneSlides } from "@/lib/ids";
 import { STARTER_TEMPLATES, firstSlide, resolveAvatarInSlides } from "@/lib/starter";
@@ -81,6 +81,13 @@ function Landing() {
           {busy ? <Loader2 className="spin" size={22} strokeWidth={3} /> : <DiscordIcon />}
           Se connecter avec Discord
         </button>
+        <div className="-mt-3 flex flex-col items-center gap-1.5">
+          <button className="nb-btn !rounded-[14px] !px-5 !py-2.5 !text-[16px]" onClick={enterGuest} data-testid="guest">
+            <UserRound size={18} strokeWidth={2.8} />
+            Essayer sans compte
+          </button>
+          <span className="text-[13px] font-bold text-muted">Mode invité : tes présentations restent dans ce navigateur.</span>
+        </div>
         {authError && (
           <p className="max-w-[560px] rounded-[14px] border-[2.5px] border-ink bg-coral px-4 py-2.5 text-[15px] font-bold" role="alert">
             La connexion n&apos;a pas abouti : {authError}
@@ -198,8 +205,14 @@ function Dashboard() {
             <img src={avatar || "/library/avatar-defaut.svg"} alt="" className="h-8 w-8 rounded-full border-2 border-ink object-cover" />
             {profile?.name}
           </span>
-          {data.mode === "supabase" && (
-            <button className="ic-btn" onClick={() => data.signOut()} title="Se déconnecter" aria-label="Se déconnecter">
+          {data.mode !== "local" && (
+            <button
+              className="ic-btn"
+              onClick={() => data.signOut()}
+              title={data.mode === "guest" ? "Quitter le mode invité" : "Se déconnecter"}
+              aria-label={data.mode === "guest" ? "Quitter le mode invité" : "Se déconnecter"}
+              data-testid="signout"
+            >
               <LogOut size={19} strokeWidth={2.6} />
             </button>
           )}
@@ -215,6 +228,18 @@ function Dashboard() {
             <input type="checkbox" className="h-4 w-4 accent-[#111]" checked={!!profile?.isStaff} onChange={(e) => setLocalStaff(e.target.checked)} data-testid="demo-staff" />
             Simuler le rôle staff
           </label>
+        </div>
+      )}
+
+      {data.mode === "guest" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[16px] border-[2.5px] border-dashed border-ink bg-white px-4 py-3 text-[14px] font-bold" data-testid="guest-banner">
+          <span>
+            <b className="font-extrabold">Mode invité</b> — tes présentations restent dans ce navigateur, sur cet appareil. Connecte-toi avec Discord pour les retrouver partout.
+          </span>
+          <button className="nb-btn sm ml-auto !bg-[#5865f2] !text-white" onClick={() => data.signIn().catch((e) => toast(errorText(e), "error"))} data-testid="guest-signin">
+            <DiscordIcon size={16} />
+            Se connecter avec Discord
+          </button>
         </div>
       )}
 

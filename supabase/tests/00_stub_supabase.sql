@@ -2,6 +2,16 @@
 -- rôles, auth.uid(), auth.users et le stockage. Sert uniquement à tester les
 -- règles de sécurité sur un Postgres local (voir supabase/tests/run.sh).
 
+-- ⚠️  NE PAS EXÉCUTER SUR SUPABASE. Ce fichier imite Supabase sur un
+-- Postgres local jetable ; sur un vrai projet, tout cela existe déjà.
+-- Le seul script à exécuter sur Supabase est supabase/migrations/*.sql.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname in ('supabase_admin', 'authenticator')) then
+    raise exception 'Ce fichier de test ne doit pas être exécuté sur un projet Supabase : il sert uniquement à « npm run test:rls » sur un Postgres local.';
+  end if;
+end $$;
+
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;

@@ -5,6 +5,7 @@ L'éditeur de diapos de [MS Creators](https://ms-creators.com). On choisit un mo
 - **Éditeur** : textes à contour épais, étiquettes, cartes, images, formes ; glisser-déposer, guides d'alignement, annuler/rétablir, enregistrement automatique.
 - **Bibliothèque d'éléments** : titres, étiquettes, listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo.
 - **Modèles** : des diapos et des présentations complètes prêtes à remplir.
+- **Mode invité** : « Essayer sans compte » ouvre l'éditeur sans Discord ; les présentations restent alors dans le navigateur.
 - **Connexion Discord** : chacun retrouve ses présentations ; le rôle `@staff` du serveur MS Creators ouvre le **panel admin**, qui permet d'ajouter des éléments à la bibliothèque et de nouveaux modèles.
 - **Export** PDF et PNG, **mode présentation** plein écran.
 
@@ -80,6 +81,8 @@ npm run test:e2e
 ```
 
 Pilote l'application dans Chromium, en mode démo : création, édition, glisser-déposer, modèles, export, présentation, panel admin. Nécessite Playwright et une application qui tourne sur `http://localhost:3000` (ou `E2E_URL`).
+
+`tests/e2e/guest.cjs` vérifie le mode invité ; son en-tête explique comment le lancer (il lui faut une application construite avec les variables Supabase).
 
 ## Organisation du code
 

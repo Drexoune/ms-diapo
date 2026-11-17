@@ -32,7 +32,7 @@ export interface UploadResult {
  * L'interface de l'application ne connaît que ce contrat.
  */
 export interface DataApi {
-  readonly mode: "supabase" | "local";
+  readonly mode: "supabase" | "local" | "guest";
 
   getProfile(): Promise<Profile | null>;
   /** Prévient quand la session change (connexion, déconnexion). Renvoie la fonction de désabonnement. */
