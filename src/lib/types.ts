@@ -184,4 +184,30 @@ export interface Profile {
   isStaff: boolean;
   /** Le rôle staff n'a pas été revérifié récemment : une reconnexion est nécessaire. */
   staffStale?: boolean;
+  /** La visite guidée a déjà été proposée à cette personne. */
+  onboarded?: boolean;
+}
+
+/* ───────────── Exemples ───────────── */
+
+/** Une page d'exemple, déjà convertie en image. */
+export interface ExamplePage {
+  url: string;
+  /** Petite image pour les miniatures. */
+  thumb: string;
+  w: number;
+  h: number;
+}
+
+/** Une ancienne présentation déposée par le staff, consultable par tous. */
+export interface Example {
+  id: string;
+  title: string;
+  /** Qui l'a présentée (facultatif). */
+  author: string;
+  description: string;
+  pages: ExamplePage[];
+  /** Fichier d'origine à télécharger, quand l'exemple vient d'un PDF. */
+  pdfUrl: string | null;
+  createdAt: string;
 }

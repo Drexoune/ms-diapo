@@ -126,12 +126,66 @@ select pg_temp.must_fail('anonyme ne peut rien ajouter', $$insert into public.as
 select pg_temp.must_fail('anonyme ne peut pas appeler is_staff()', 'select public.is_staff()');
 select pg_temp.must_fail('anonyme ne peut pas envoyer de fichier', $$insert into storage.objects (bucket_id, name) values ('uploads', 'a/b.png')$$);
 
+-- ── Exemples (rubrique consultable par tous, alimentée par le staff) ──
+select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.must_touch('A (staff) publie un exemple', $$insert into public.examples (id, title, author, pages) values ('e0000000-0000-0000-0000-00000000000a', 'Mission locale', 'Stéphanie', '[{"url":"u","thumb":"t","w":1920,"h":1080}]')$$, 1);
+select pg_temp.must_touch('A (staff) renomme un exemple', $$update public.examples set title = 'Mission locale 2026'$$, 1);
+select pg_temp.must_touch('A (staff) range une page dans le stockage des exemples', $$insert into storage.objects (bucket_id, name) values ('examples', 'e0000000-0000-0000-0000-00000000000a/p001.webp')$$, 1);
+select pg_temp.must_fail('contrainte : un exemple a au moins une page', $$insert into public.examples (title, pages) values ('x', '[]')$$);
+select pg_temp.must_fail('contrainte : les pages forment une liste', $$insert into public.examples (title, pages) values ('x', '{}')$$);
+select pg_temp.must_fail('contrainte : un exemple a un titre', $$insert into public.examples (title, pages) values ('', '[{}]')$$);
+
+select pg_temp.act_as('bbbbbbbb-0000-0000-0000-000000000002');
+select pg_temp.must_count('B (membre) consulte les exemples', 'select 1 from public.examples', 1);
+select pg_temp.must_fail('B ne peut pas publier d''exemple', $$insert into public.examples (title, pages) values ('x', '[{}]')$$);
+select pg_temp.must_touch('B ne peut pas modifier un exemple', $$update public.examples set title = 'piraté'$$, 0);
+select pg_temp.must_touch('B ne peut pas supprimer un exemple', $$delete from public.examples$$, 0);
+select pg_temp.must_fail('B ne peut pas déposer de fichier d''exemple', $$insert into storage.objects (bucket_id, name) values ('examples', 'x/p001.webp')$$);
+
+select pg_temp.act_as('cccccccc-0000-0000-0000-000000000003');
+select pg_temp.must_fail('C (staff périmé) ne peut pas publier d''exemple', $$insert into public.examples (title, pages) values ('x', '[{}]')$$);
+
+select pg_temp.act_as('anon');
+select pg_temp.must_count('anonyme (invité) consulte les exemples', 'select 1 from public.examples', 1);
+select pg_temp.must_fail('anonyme ne peut pas publier d''exemple', $$insert into public.examples (title, pages) values ('x', '[{}]')$$);
+select pg_temp.must_fail('anonyme ne peut pas marquer de visite', 'select public.mark_onboarded()');
+
+-- ── Renommage du pack de départ ──
+select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.must_touch('A (staff) renomme un élément du pack', $$insert into public.builtin_names (item_id, name) values ('b:etoile', 'Étoile MS')$$, 1);
+select pg_temp.must_touch('A (staff) change ce nom', $$update public.builtin_names set name = 'Étoile jaune'$$, 1);
+select pg_temp.must_fail('contrainte : seulement le pack de départ', $$insert into public.builtin_names (item_id, name) values ('autre', 'x')$$);
+select pg_temp.must_fail('contrainte : un nom non vide', $$insert into public.builtin_names (item_id, name) values ('b:coeur', '')$$);
+select pg_temp.act_as('bbbbbbbb-0000-0000-0000-000000000002');
+select pg_temp.must_count('B lit les noms', 'select 1 from public.builtin_names', 1);
+select pg_temp.must_fail('B ne peut pas renommer', $$insert into public.builtin_names (item_id, name) values ('b:coeur', 'x')$$);
+select pg_temp.must_touch('B ne peut pas changer un nom', $$update public.builtin_names set name = 'piraté'$$, 0);
+select pg_temp.must_touch('B ne peut pas effacer un nom', $$delete from public.builtin_names$$, 0);
+select pg_temp.act_as('cccccccc-0000-0000-0000-000000000003');
+select pg_temp.must_fail('C (staff périmé) ne peut pas renommer', $$insert into public.builtin_names (item_id, name) values ('b:coeur', 'x')$$);
+select pg_temp.act_as('anon');
+select pg_temp.must_count('anonyme lit les noms', 'select 1 from public.builtin_names', 1);
+select pg_temp.must_fail('anonyme ne peut pas renommer', $$insert into public.builtin_names (item_id, name) values ('b:coeur', 'x')$$);
+select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.must_touch('A (staff) rend son nom d''origine', $$delete from public.builtin_names$$, 1);
+select pg_temp.must_touch('A (staff) retire une page d''exemple du stockage', $$delete from storage.objects where bucket_id = 'examples'$$, 1);
+
+-- ── Visite guidée : chacun ne marque que son propre profil ──
+select pg_temp.act_as('bbbbbbbb-0000-0000-0000-000000000002');
+select pg_temp.must_count('avant : la visite de B n''est pas marquée', 'select 1 from public.profiles where onboarded_at is null', 1);
+select public.mark_onboarded();
+select pg_temp.must_count('B marque sa visite comme vue', 'select 1 from public.profiles where onboarded_at is not null', 1);
+select pg_temp.must_fail('B ne peut toujours pas modifier son profil à la main', $$update public.profiles set onboarded_at = null, is_staff = true$$);
+
 -- ── Retour à A : la suppression en cascade et le nettoyage ──
 select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
 select pg_temp.must_touch('A (staff) supprime un élément', $$delete from public.assets$$, 1);
 select pg_temp.must_touch('A supprime sa présentation', $$delete from public.decks$$, 1);
 
+select pg_temp.must_touch('A (staff) supprime un exemple', $$delete from public.examples$$, 1);
+
 reset role;
+select pg_temp.must_count('mark_onboarded n''a touché que le profil de B', $$select 1 from public.profiles where onboarded_at is not null$$, 1);
 select pg_temp.must_count('la présentation de B est intacte', 'select 1 from public.decks', 1);
 delete from auth.users where id = 'bbbbbbbb-0000-0000-0000-000000000002';
 select pg_temp.must_count('supprimer un compte supprime ses présentations', 'select 1 from public.decks', 0);

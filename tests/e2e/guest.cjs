@@ -38,7 +38,14 @@ function check(cond, label, detail = "") {
 
   await page.click('[data-testid="guest"]');
   await page.waitForSelector('[data-testid="new-blank"]');
+  await page.waitForSelector('[data-testid="tour-bubble"]');
+  check((await page.locator('[data-testid="tour"]').getAttribute("data-step")) === "welcome", "à sa première venue, un invité a droit à la visite guidée");
+  await page.click('[data-testid="tour-skip"]');
+  await page.waitForSelector('[data-testid="tour"]', { state: "detached" });
   check((await page.locator('[data-testid="guest-banner"]').count()) === 1, "le mode invité ouvre l'accueil, avec un bandeau explicite");
+  // Le serveur factice ne répond pas : le client Supabase réessaie quelques secondes avant d'abandonner.
+  await page.waitForFunction(() => !/Chargement/.test(document.querySelector('[data-testid="examples-section"]')?.textContent || ""), null, { timeout: 30000 });
+  check((await page.locator('[data-testid="examples-section"]').innerText()).includes("Aucun exemple"), "sans serveur joignable, la rubrique Exemples reste simplement vide");
   check((await page.locator("text=Invité").count()) >= 1, "la personne est nommée « Invité »");
   check((await page.locator('[data-testid="admin-link"]').count()) === 0 && (await page.locator('[data-testid="demo-staff"]').count()) === 0, "aucun accès staff, ni réel ni simulé");
   if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/invite-accueil.png` });
@@ -77,6 +84,8 @@ function check(cond, label, detail = "") {
   await page.click('[data-testid="guest"]');
   await page.waitForSelector("[data-deck-id]");
   check(true, "en revenant en invité, on retrouve sa présentation");
+  await page.waitForTimeout(800);
+  check((await page.locator('[data-testid="tour"]').count()) === 0, "… sans revoir la visite guidée");
 
   check(exceptions.length === 0, "aucune exception pendant le parcours", exceptions.join(" | "));
   await browser.close();

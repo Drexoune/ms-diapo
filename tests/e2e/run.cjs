@@ -117,7 +117,12 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   /* ───────────── 1. Accueil et création ───────────── */
   section("Accueil");
   await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.evaluate(() => localStorage.clear());
+  // Visite guidée déjà vue : elle a son propre parcours (tests/e2e/tour.cjs).
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem("msd:onboarded:local", "1");
+    indexedDB.deleteDatabase("ms-diapo");
+  });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForSelector('[data-testid="new-blank"]');
   check((await page.locator('[data-testid="signin"]').count()) === 0, "le mode démo ne demande pas de connexion");
@@ -427,10 +432,49 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:assets") || "[]").length === 1);
   const asset = (await stored("msd:assets"))[0];
   check(asset.name === "sticker test" && asset.category === "stickers" && asset.kind === "image", "le staff ajoute une image à la bibliothèque", JSON.stringify({ n: asset.name, c: asset.category }));
-  await page.locator('[data-asset-id="b:coeur"] button').click();
+  const confirmDialog = () => page.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
+  await page.locator('[data-asset-id="b:coeur"] [data-testid="asset-delete"]').click();
+  await confirmDialog();
   await page.waitForFunction(() => (localStorage.getItem("msd:hidden") || "").includes("b:coeur"));
-  check(true, "le staff masque un élément du pack de départ");
+  check((await page.locator('[data-testid="admin-assets"] [data-asset-id="b:coeur"]').count()) === 0, "le staff supprime un élément du pack de départ (après confirmation)");
+  await page.locator('[data-testid="deleted-builtins"] summary').click();
+  check((await page.locator('[data-restore="b:coeur"]').count()) === 1, "… qui reste récupérable dans « supprimés »");
+
+  // Renommer un élément du pack de départ, puis lui rendre son nom.
+  await page.locator('[data-asset-id="b:etoile"] [data-testid="asset-rename"]').click();
+  await page.fill('[data-testid="rename-input"]', "Étoile MS");
+  await page.click('[data-testid="rename-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:builtin-names") || "{}")["b:etoile"] === "Étoile MS");
+  check((await page.locator('[data-asset-id="b:etoile"]').innerText()).includes("Étoile MS"), "le staff renomme un élément du pack de départ");
+  await page.locator('[data-asset-id="b:eclair"] [data-testid="asset-rename"]').click();
+  await page.fill('[data-testid="rename-input"]', "Zap");
+  await page.click('[data-testid="rename-save"]');
+  await page.locator('[data-asset-id="b:eclair"] [data-testid="asset-rename"]').click();
+  await page.getByRole("button", { name: /Revenir au nom d'origine/ }).click();
+  await page.waitForFunction(() => !("b:eclair" in JSON.parse(localStorage.getItem("msd:builtin-names") || "{}")));
+  check((await page.locator('[data-asset-id="b:eclair"]').innerText()).includes("Éclair"), "… et peut lui rendre son nom d'origine");
+
+  // Renommer puis supprimer complètement un élément ajouté par le staff.
+  const customCard = page.locator(`[data-asset-id="${asset.id}"]`);
+  await customCard.locator('[data-testid="asset-rename"]').click();
+  await page.getByRole("dialog").locator("input").first().fill("Triangle rouge");
+  await page.getByRole("dialog").getByRole("button", { name: "Enregistrer" }).click();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:assets"))[0].name === "Triangle rouge");
+  check(true, "le staff renomme un élément qu'il a ajouté");
   await shot("admin");
+
+  // Modèles du pack de départ : renommer, supprimer.
+  await page.click('[data-testid="admin-tab-templates"]');
+  await page.locator('[data-template-id="b:modele-podium"] [data-testid="template-rename"]').click();
+  await page.fill('[data-testid="rename-input"]', "Classement du mois");
+  await page.click('[data-testid="rename-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:builtin-names") || "{}")["b:modele-podium"] === "Classement du mois");
+  check(true, "le staff renomme un modèle du pack de départ");
+  await page.locator('[data-template-id="b:modele-aidez-nous"] [data-testid="template-delete"]').click();
+  await confirmDialog();
+  await page.waitForFunction(() => (localStorage.getItem("msd:hidden") || "").includes("b:modele-aidez-nous"));
+  check((await page.locator('[data-template-id="b:modele-aidez-nous"]').count()) === 0, "le staff supprime un modèle du pack de départ");
+  await page.click('[data-testid="admin-tab-assets"]');
 
   await page.click('[data-testid="admin-tab-templates"]');
   await page.click('[data-testid="admin-new-slide-template"]');
@@ -444,8 +488,17 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   check(templates[0].slides[0].els.some((e) => e.src === "{avatar}"), "la bulle du présentateur reste un emplacement, pas l'image de l'auteur");
 
   await page.getByRole("tab", { name: "Stickers" }).click();
-  check((await page.locator('[data-testid="library"]').getByText("sticker test").count()) === 1, "l'image ajoutée apparaît dans la bibliothèque de l'éditeur");
-  check((await page.locator('[data-asset-id="b:coeur"]').count()) === 0, "l'élément masqué n'y est plus");
+  check((await page.locator('[data-testid="library"]').getByText("Triangle rouge").count()) === 1, "l'image ajoutée (et renommée) apparaît dans la bibliothèque de l'éditeur");
+  check((await page.locator('[data-asset-id="b:etoile"]').innerText()).includes("Étoile MS"), "le nouveau nom d'un élément du pack s'y affiche aussi");
+  check((await page.locator('[data-asset-id="b:coeur"]').count()) === 0, "l'élément supprimé n'y est plus");
+  await page.click('[data-testid="open-templates"]');
+  await page.waitForSelector('[data-testid="template-grid"]');
+  check(
+    (await page.locator('[data-testid="template-grid"] [data-template-id="b:modele-podium"]').innerText()).includes("Classement du mois") &&
+      (await page.locator('[data-testid="template-grid"] [data-template-id="b:modele-aidez-nous"]').count()) === 0,
+    "les modèles renommés et supprimés le sont aussi pour les utilisateurs",
+  );
+  await page.keyboard.press("Escape");
 
   await clickEl(texts().nth(1));
   await toolbar().locator('button[aria-label="Plus d\'options"]').click();
@@ -463,6 +516,186 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:templates") || "[]").length === 2);
   templates = await stored("msd:templates");
   check(templates[1].name === "Diapo maison" && templates[1].kind === "slide", "« Cette diapo → modèle » crée un modèle");
+
+  /* ───────────── 14. Exemples ───────────── */
+  section("Exemples");
+  const examplesStored = () => stored("msd:examples").then((l) => l || []);
+  const idbKeys = () =>
+    page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const req = indexedDB.open("ms-diapo");
+          req.onsuccess = () => {
+            const keys = req.result.transaction("files").objectStore("files").getAllKeys();
+            keys.onsuccess = () => resolve(keys.result);
+          };
+        }),
+    );
+  // La fenêtre de dépôt se ferme une fois l'exemple enregistré (le bouton, lui, laisse vite place à la progression).
+  const publish = async () => {
+    await page.click('[data-testid="example-submit"]');
+    await page.waitForSelector('[role="dialog"][aria-label="Ajouter un exemple"]', { state: "detached", timeout: 180000 });
+  };
+
+  // Un PDF de 3 pages, fabriqué pour le test.
+  const { jsPDF } = require("jspdf");
+  const doc = new jsPDF({ orientation: "landscape", unit: "px", format: [1920, 1080], hotfixes: ["px_scaling"] });
+  for (let i = 1; i <= 3; i++) {
+    if (i > 1) doc.addPage([1920, 1080], "landscape");
+    doc.setFillColor(255, 220 - i * 40, 80);
+    doc.rect(0, 0, 1920, 1080, "F");
+    doc.setFontSize(220);
+    doc.text(`PAGE ${i}`, 420, 620);
+  }
+  const PDF = path.join(TMP, "atelier-mission_locale.pdf");
+  fs.writeFileSync(PDF, Buffer.from(doc.output("arraybuffer")));
+
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="examples-section"]');
+  check((await page.locator('[data-testid="examples-section"]').innerText()).includes("Aucun exemple"), "la rubrique Exemples est vide au départ");
+  await page.click('[data-testid="examples-add"]');
+  await page.setInputFiles('[data-testid="example-input"]', PDF);
+  await page.waitForFunction(() => /3 pages/.test(document.querySelector('[data-testid="example-picked"]')?.textContent || ""), null, { timeout: 30000 });
+  check((await page.inputValue('[data-testid="example-title"]')) === "Atelier mission locale", "le PDF est lu (3 pages) et le titre proposé d'après son nom");
+  await page.fill('[data-testid="example-title"]', "Atelier Mission locale");
+  await page.fill('[data-testid="example-author"]', "Stéphanie");
+  await publish();
+  let examples = await examplesStored();
+  check(examples.length === 1 && examples[0].pages.length === 3 && !!examples[0].pdfUrl, "le staff publie un PDF : 3 pages et le fichier d'origine", JSON.stringify(examples.map((e) => e.pages.length)));
+  check(examples[0].pages.every((pg) => pg.w === 1920 && pg.h === 1080), "les pages sont rendues en 1920 × 1080");
+  check((await idbKeys()).length === 7, "pages, miniatures et PDF sont rangés (7 fichiers)", String((await idbKeys()).length));
+  await page.waitForSelector('[data-testid="examples-row"] [data-example-id]');
+  check((await page.locator('[data-testid="examples-row"]').innerText()).includes("Présenté par Stéphanie"), "l'exemple apparaît sur l'accueil avec son présentateur");
+  await shot("exemples-accueil");
+
+  // Visionneuse.
+  await page.click('[data-testid="examples-row"] [data-example-id]');
+  await page.waitForSelector('[data-testid="example-viewer"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="example-page"]')?.naturalWidth === 1920);
+  check((await page.locator('[data-testid="example-count"]').innerText()) === "1 / 3", "la visionneuse s'ouvre sur la première page");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  check((await page.locator('[data-testid="example-count"]').innerText()) === "3 / 3", "les flèches tournent les pages, sans dépasser la dernière");
+  await page.locator('[data-testid="example-strip"] [data-page="0"]').click();
+  check((await page.locator('[data-testid="example-count"]').innerText()) === "1 / 3", "une miniature mène à sa page");
+  await shot("exemples-visionneuse");
+  const [original] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), page.click('[data-testid="example-download"]')]);
+  const originalPath = path.join(TMP, "original.pdf");
+  await original.saveAs(originalPath);
+  check(original.suggestedFilename() === "atelier-mission-locale.pdf" && fs.readFileSync(originalPath).equals(fs.readFileSync(PDF)), "« Télécharger en PDF » rend le fichier d'origine, intact");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[data-testid="example-viewer"]', { state: "detached" });
+  check(true, "Échap ferme la visionneuse");
+
+  // Des images (une par diapo), dans l'ordre de leurs noms.
+  const img1 = makePng(path.join(TMP, "diapo-10.png"), 640, 360, [30, 160, 90, 255]);
+  const img2 = makePng(path.join(TMP, "diapo-2.png"), 640, 360, [200, 60, 60, 255]);
+  await page.click('[data-testid="examples-add"]');
+  await page.setInputFiles('[data-testid="example-input"]', [img1, img2]);
+  check((await page.locator('[data-testid="example-picked"]').innerText()).includes("diapo-2.png, diapo-10.png"), "des images sont rangées dans l'ordre naturel de leurs noms");
+  await page.fill('[data-testid="example-title"]', "Planning en images");
+  await publish();
+  examples = await examplesStored();
+  const fromImages = examples.find((e) => e.title === "Planning en images");
+  check(fromImages && fromImages.pages.length === 2 && fromImages.pdfUrl === null, "le staff publie des images : 2 pages, sans PDF d'origine");
+  await page.locator(`[data-example-id="${fromImages.id}"]`).click();
+  await page.waitForSelector('[data-testid="example-viewer"]');
+  const [built] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), page.click('[data-testid="example-download"]')]);
+  const builtPath = path.join(TMP, "built.pdf");
+  await built.saveAs(builtPath);
+  const builtPages = (fs.readFileSync(builtPath).toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+  check(builtPages === 2, "sans PDF d'origine, le téléchargement fabrique un PDF des pages", `${builtPages} pages`);
+  await page.keyboard.press("Escape");
+
+  // Une présentation faite dans l'app.
+  await page.click('[data-testid="examples-add"]');
+  await page.click('[data-testid="example-tab-deck"]');
+  await page.waitForSelector("[data-pick-deck]");
+  await page.locator("[data-pick-deck]").first().click();
+  const deckTitle = await page.inputValue('[data-testid="example-title"]');
+  await publish();
+  examples = await examplesStored();
+  const fromDeck = examples.find((e) => e.title === deckTitle);
+  check(!!fromDeck && fromDeck.pages.length === 8 && fromDeck.pages[0].w === 1920, "une présentation de l'app devient un exemple (8 pages)", fromDeck ? String(fromDeck.pages.length) : "absent");
+  check(new Set(examples.map((e) => e.id)).size === 3, "trois exemples distincts");
+
+  // Depuis l'éditeur : la galerie, puis la visionneuse à sa place.
+  await page.locator("[data-deck-id]").first().click();
+  await page.waitForSelector('[data-testid="stage"] .el-text');
+  await page.click('[data-testid="open-examples"]');
+  await page.waitForSelector('[data-testid="examples-grid"]');
+  check((await page.locator('[data-testid="examples-grid"] [data-example-id]').count()) === 3, "l'éditeur montre aussi les exemples");
+  await page.locator('[data-testid="examples-grid"] [data-example-id]').last().click();
+  await page.waitForSelector('[data-testid="example-viewer"]');
+  const before2 = await page.locator('[data-testid="stage"] .el').count();
+  await page.keyboard.press("Delete");
+  await page.keyboard.press("ArrowRight");
+  check((await page.locator('[data-testid="example-count"]').innerText()) === "2 / 3", "dans l'éditeur, les flèches tournent les pages de l'exemple…");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[data-testid="examples-grid"]');
+  check(true, "… Échap revient à la galerie");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[data-testid="examples-grid"]', { state: "detached" });
+  check((await page.locator('[data-testid="stage"] .el').count()) === before2, "… et la diapo n'a pas bougé pendant ce temps");
+
+  // Panel admin : modifier, supprimer (fichiers compris).
+  await page.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
+  await page.click('[data-testid="admin-tab-examples"]');
+  await page.waitForSelector('[data-testid="admin-examples"]');
+  check((await page.locator('[data-testid="admin-examples"] [data-example-id]').count()) === 3, "le panel admin liste les exemples");
+  const pdfCard = page.locator(`[data-testid="admin-examples"] [data-example-id="${examples.find((e) => e.pdfUrl).id}"]`);
+  await pdfCard.getByRole("button", { name: "Modifier" }).click();
+  await page.fill('[data-testid="example-edit-title"]', "Atelier Mission locale (2026)");
+  await page.click('[data-testid="example-edit-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:examples")).some((e) => e.title === "Atelier Mission locale (2026)"));
+  check(true, "le staff renomme un exemple");
+
+  // Modifier les pages : réordonner, retirer, ajouter.
+  const pdfId = examples.find((e) => e.pdfUrl).id;
+  const before3 = (await examplesStored()).find((e) => e.id === pdfId);
+  const filesStart = (await idbKeys()).length;
+  await pdfCard.getByRole("button", { name: "Modifier" }).click();
+  const tiles = page.locator('[data-testid="example-pages"] > div');
+  check((await tiles.count()) === 3, "la fenêtre de modification montre les 3 pages");
+  await tiles.nth(2).getByRole("button", { name: "Avancer la page" }).click();
+  await tiles.nth(1).getByRole("button", { name: "Avancer la page" }).click();
+  await tiles.nth(2).dragTo(tiles.nth(1));
+  await tiles.nth(1).getByRole("button", { name: "Retirer la page 2" }).click();
+  await page.setInputFiles('[data-testid="example-add-input"]', [img2, img1]);
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="example-pages"] > div').length === 4, null, { timeout: 60000 });
+  check((await page.locator("text=le PDF d'origine ne sera plus proposé").count()) === 1, "on est prévenu que le PDF d'origine ne correspondra plus");
+  await page.click('[data-testid="example-edit-save"]');
+  await page.waitForSelector('[role="dialog"][aria-label="Modifier l\'exemple"]', { state: "detached", timeout: 30000 });
+  const after3 = (await examplesStored()).find((e) => e.id === pdfId);
+  const o = before3.pages.map((pg) => pg.url);
+  // Départ 1-2-3 ; la 3 passe devant (3-1-2), puis la 2 glissée avant la 1 (3-2-1), puis la 2 retirée (3-1), plus 2 images.
+  check(
+    after3.pages.length === 4 && after3.pages[0].url === o[2] && after3.pages[1].url === o[0] && after3.pages.every((pg) => pg.url.startsWith("idb:")),
+    "pages réordonnées (flèches et glisser), retirée et ajoutées, enregistrées",
+    after3.pages.map((pg) => pg.url.slice(-14)).join(" "),
+  );
+  check(after3.pdfUrl === null, "le PDF d'origine n'est plus proposé une fois les pages changées");
+  check((await idbKeys()).length === filesStart - 2 - 1 + 4, "les fichiers de la page retirée et le PDF d'origine sont supprimés", `${filesStart} → ${(await idbKeys()).length}`);
+  await pdfCard.locator("button").first().click();
+  await page.waitForSelector('[data-testid="example-viewer"]');
+  check((await page.locator('[data-testid="example-count"]').innerText()) === "1 / 4", "la visionneuse montre les nouvelles pages");
+  await page.keyboard.press("Escape");
+
+  // Annuler une modification efface les pages envoyées pour rien.
+  const filesMid = (await idbKeys()).length;
+  await pdfCard.getByRole("button", { name: "Modifier" }).click();
+  await page.setInputFiles('[data-testid="example-add-input"]', [img1]);
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="example-pages"] > div').length === 5, null, { timeout: 60000 });
+  await page.getByRole("dialog").getByRole("button", { name: "Annuler" }).click();
+  await page.waitForTimeout(500);
+  check((await idbKeys()).length === filesMid && (await examplesStored()).find((e) => e.id === pdfId).pages.length === 4, "annuler laisse l'exemple intact et efface les pages ajoutées");
+
+  const filesBefore = (await idbKeys()).length;
+  await pdfCard.getByRole("button", { name: "Supprimer" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:examples")).length === 2);
+  check(filesBefore - (await idbKeys()).length === 8, "supprimer un exemple supprime aussi tous ses fichiers (8)", String(filesBefore - (await idbKeys()).length));
 
   /* ───────────── Bilan ───────────── */
   section("Console du navigateur");
