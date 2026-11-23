@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CircleHelp, Lightbulb, Loader2, Minus, Plus, ShieldCheck } from "lucide-react";
+import { BookOpen, CircleHelp, Lightbulb, Loader2, Minus, Plus, ShieldCheck } from "lucide-react";
 import { SaveElementsModal, SaveTemplateModal, UploadAssetsModal } from "@/components/admin/forms";
+import { ExamplesModal } from "@/components/examples/ExamplesSection";
 import { Modal } from "@/components/ui/Modal";
 import { Canvas, markFresh } from "./Canvas";
 import { HelpModal } from "./HelpModal";
@@ -15,6 +16,7 @@ import { TemplatesModal } from "./TemplatesModal";
 import { Toolbar } from "./Toolbar";
 import { TopBar } from "./TopBar";
 import { useApp } from "@/lib/app";
+import { startTour } from "@/lib/tour";
 import { data } from "@/lib/backend";
 import { currentSlide, hasClipboard, useEditor } from "@/lib/editor/store";
 import { exportPdf, exportPng, exportZip } from "@/lib/export";
@@ -30,6 +32,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Une erreur 
 
 type Dialog =
   | { kind: "templates" }
+  | { kind: "examples" }
   | { kind: "help" }
   | { kind: "upload"; category: AssetCategory }
   | { kind: "save-els"; els: El[] }
@@ -529,18 +532,30 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
             </main>
 
             <aside className="flex w-[132px] flex-none flex-col gap-3.5">
-              <button
-                className="group flex flex-col items-center gap-1.5 rounded-[20px] border-[3px] border-ink bg-coral px-2 py-3.5 text-center shadow-[4px_5px_0_#111] transition-transform hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5"
-                onClick={() => setDialog({ kind: "templates" })}
-                data-testid="open-templates"
-              >
-                <span className="relative mb-1 h-[46px] w-[58px]">
-                  <span className="absolute left-2 top-0 h-[36px] w-[50px] rotate-6 rounded-md border-[2.5px] border-ink bg-sun" />
-                  <span className="absolute left-0 top-2 flex h-[36px] w-[50px] items-center justify-center rounded-md border-[2.5px] border-ink bg-white text-[13px] font-black">Aa</span>
-                </span>
-                <span className="display text-[17px]">Modèles</span>
-                <span className="text-[12px] font-bold leading-tight">Pars d&apos;un modèle tout prêt</span>
-              </button>
+              <div className="flex flex-col gap-3.5" data-tour="inspiration">
+                <button
+                  className="group flex flex-col items-center gap-1.5 rounded-[20px] border-[3px] border-ink bg-coral px-2 py-3.5 text-center shadow-[4px_5px_0_#111] transition-transform hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5"
+                  onClick={() => setDialog({ kind: "templates" })}
+                  data-testid="open-templates"
+                >
+                  <span className="relative mb-1 h-[46px] w-[58px]">
+                    <span className="absolute left-2 top-0 h-[36px] w-[50px] rotate-6 rounded-md border-[2.5px] border-ink bg-sun" />
+                    <span className="absolute left-0 top-2 flex h-[36px] w-[50px] items-center justify-center rounded-md border-[2.5px] border-ink bg-white text-[13px] font-black">Aa</span>
+                  </span>
+                  <span className="display text-[17px]">Modèles</span>
+                  <span className="text-[12px] font-bold leading-tight">Pars d&apos;un modèle tout prêt</span>
+                </button>
+
+                <button
+                  className="flex flex-col items-center gap-1 rounded-[18px] border-[3px] border-ink bg-sun px-2 py-2.5 text-center shadow-[4px_5px_0_#111] transition-transform hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5"
+                  onClick={() => setDialog({ kind: "examples" })}
+                  data-testid="open-examples"
+                >
+                  <BookOpen size={22} strokeWidth={2.6} />
+                  <span className="display text-[15px]">Exemples</span>
+                  <span className="text-[11.5px] font-bold leading-tight">Feuillette d&apos;anciennes présentations</span>
+                </button>
+              </div>
 
               <div className="nb flex flex-col items-center gap-2 !rounded-[18px] p-2.5">
                 <span className="text-[12px] font-extrabold">Zoom</span>
@@ -601,7 +616,16 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
           }
         />
       )}
-      {dialog?.kind === "help" && <HelpModal onClose={() => setDialog(null)} />}
+      {dialog?.kind === "help" && (
+        <HelpModal
+          onClose={() => setDialog(null)}
+          onReplayTour={() => {
+            setDialog(null);
+            startTour("editor", { name: profile?.name ?? "", isStaff });
+          }}
+        />
+      )}
+      {dialog?.kind === "examples" && <ExamplesModal onClose={() => setDialog(null)} />}
       {dialog?.kind === "upload" && <UploadAssetsModal category={dialog.category} onClose={() => setDialog(null)} />}
       {dialog?.kind === "save-els" && <SaveElementsModal els={dialog.els} onClose={() => setDialog(null)} />}
       {dialog?.kind === "save-template" && <SaveTemplateModal slides={dialog.slides} kind={dialog.scope} onClose={() => setDialog(null)} />}

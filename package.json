@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-pdfjs.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-pdfjs.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:rls": "bash supabase/tests/run.sh",
-    "test:e2e": "node tests/e2e/run.cjs"
+    "test:e2e": "node tests/e2e/run.cjs && node tests/e2e/tour.cjs",
+    "postinstall": "node scripts/copy-pdfjs.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
@@ -19,6 +22,7 @@
     "jszip": "^3.10.2",
     "lucide-react": "^1.73.0",
     "next": "16.4.6",
+    "pdfjs-dist": "^6.5.438",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zustand": "^5.1.0"

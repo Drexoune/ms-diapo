@@ -55,38 +55,40 @@ export function TopBar({
         <img src="/library/ms-logo.png" alt="MS Creators" className="h-[42px] w-[46px] object-contain" />
       </Link>
 
-      <label className="flex min-w-[160px] max-w-[420px] flex-1 flex-col">
-        <span className="pl-1 text-[12px] font-extrabold leading-tight">Nom {docLabel}</span>
-        <input
-          className="h-[38px] w-full rounded-[11px] border-[2.5px] border-ink bg-white px-3 text-[17px] font-extrabold focus:outline-none focus:ring-[3px] focus:ring-white"
-          value={title}
-          onChange={(e) => st().setTitle(e.target.value)}
-          placeholder="Sans titre"
-          maxLength={120}
-          data-testid="title-input"
-        />
-      </label>
+      <div className="flex min-w-[296px] max-w-[556px] flex-1 items-center gap-3" data-tour="doc-title">
+        <label className="flex min-w-[160px] flex-1 flex-col">
+          <span className="pl-1 text-[12px] font-extrabold leading-tight">Nom {docLabel}</span>
+          <input
+            className="h-[38px] w-full rounded-[11px] border-[2.5px] border-ink bg-white px-3 text-[17px] font-extrabold focus:outline-none focus:ring-[3px] focus:ring-white"
+            value={title}
+            onChange={(e) => st().setTitle(e.target.value)}
+            placeholder="Sans titre"
+            maxLength={120}
+            data-testid="title-input"
+          />
+        </label>
 
-      <div className="flex w-[124px] flex-none items-center gap-1.5 text-[13px] font-extrabold" aria-live="polite" data-testid="save-state" data-state={saveState}>
-        {saveState === "saved" && (
-          <>
-            <Check size={16} strokeWidth={3.2} />
-            Enregistré
-          </>
-        )}
-        {saveState === "saving" && (
-          <>
-            <Loader2 size={16} strokeWidth={3} className="spin" />
-            Enregistrement…
-          </>
-        )}
-        {saveState === "dirty" && <span className="opacity-70">Modifications…</span>}
-        {saveState === "error" && (
-          <button className="flex items-center gap-1.5 rounded-lg bg-coral px-2 py-1 text-left leading-tight" onClick={onRetrySave} title="L'enregistrement a échoué. Clique pour réessayer.">
-            <CloudOff size={16} strokeWidth={3} />
-            Non enregistré · réessayer
-          </button>
-        )}
+        <div className="flex w-[124px] flex-none items-center gap-1.5 text-[13px] font-extrabold" aria-live="polite" data-testid="save-state" data-state={saveState}>
+          {saveState === "saved" && (
+            <>
+              <Check size={16} strokeWidth={3.2} />
+              Enregistré
+            </>
+          )}
+          {saveState === "saving" && (
+            <>
+              <Loader2 size={16} strokeWidth={3} className="spin" />
+              Enregistrement…
+            </>
+          )}
+          {saveState === "dirty" && <span className="opacity-70">Modifications…</span>}
+          {saveState === "error" && (
+            <button className="flex items-center gap-1.5 rounded-lg bg-coral px-2 py-1 text-left leading-tight" onClick={onRetrySave} title="L'enregistrement a échoué. Clique pour réessayer.">
+              <CloudOff size={16} strokeWidth={3} />
+              Non enregistré · réessayer
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-none items-center gap-2">
@@ -186,7 +188,7 @@ export function TopBar({
         </button>
       </div>
 
-      <div className="ml-auto flex flex-none items-center gap-2.5">
+      <div className="ml-auto flex flex-none items-center gap-2.5" data-tour="share">
         <Popover
           align="right"
           width={270}

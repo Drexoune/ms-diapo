@@ -1,7 +1,8 @@
 import { uuid } from "../ids";
 import { blobToDataUrl, prepareImage } from "../images";
-import type { Asset, Deck, DeckMeta, Profile, Template } from "../types";
+import type { Asset, Deck, DeckMeta, Example, Profile, Template } from "../types";
 import { DataError, type DataApi } from "./api";
+import { deleteFile, deleteFiles, putFile, resolve, unresolve } from "./files";
 
 /**
  * Stockage local (navigateur). Sert au développement et à la démonstration
@@ -15,7 +16,37 @@ const K = {
   templates: "msd:templates",
   hidden: "msd:hidden",
   staff: "msd:staff",
+  examples: "msd:examples",
+  builtinNames: "msd:builtin-names",
 };
+
+/* ───────────── Visite guidée ─────────────
+   Repère « déjà vue » gardé dans le navigateur, par compte. Le mode démo et
+   le mode invité n'ont que lui ; un compte Discord l'a aussi côté serveur. */
+
+const onboardedKey = (profileId: string) => `msd:onboarded:${profileId}`;
+
+export function isOnboardedHere(profileId: string): boolean {
+  try {
+    return localStorage.getItem(onboardedKey(profileId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markOnboardedHere(profileId: string) {
+  try {
+    localStorage.setItem(onboardedKey(profileId), "1");
+  } catch {
+    /* stockage indisponible : la visite pourra se représenter, sans gravité */
+  }
+}
+
+/** Adresses « idb: » d'un exemple rendues affichables. */
+async function resolveExample(ex: Example): Promise<Example> {
+  const pages = await Promise.all(ex.pages.map(async (p) => ({ ...p, url: await resolve(p.url), thumb: await resolve(p.thumb) })));
+  return { ...ex, pages, pdfUrl: ex.pdfUrl ? await resolve(ex.pdfUrl) : null };
+}
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -45,7 +76,7 @@ export const localApi: DataApi = {
   mode: "local",
 
   async getProfile(): Promise<Profile> {
-    return { id: "local", name: "Mode démo", avatarUrl: null, isStaff: localStorage.getItem(K.staff) === "1" };
+    return { id: "local", name: "Mode démo", avatarUrl: null, isStaff: localStorage.getItem(K.staff) === "1", onboarded: isOnboardedHere("local") };
   },
   onAuthChange(cb) {
     listeners.add(cb);
@@ -129,6 +160,15 @@ export const localApi: DataApi = {
     );
   },
 
+  async listBuiltinNames() {
+    return read<Record<string, string>>(K.builtinNames, {});
+  },
+  async setBuiltinName(id, name) {
+    const names = read<Record<string, string>>(K.builtinNames, {});
+    if (name) names[id] = name;
+    else delete names[id];
+    write(K.builtinNames, names);
+  },
   async listHidden() {
     return read<string[]>(K.hidden, []);
   },
@@ -142,5 +182,52 @@ export const localApi: DataApi = {
   async uploadImage(file) {
     const img = await prepareImage(file);
     return { url: await blobToDataUrl(img.blob), width: img.width, height: img.height };
+  },
+
+  async listExamples() {
+    const list = read<Example[]>(K.examples, []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return Promise.all(list.map(resolveExample));
+  },
+  async uploadExampleFile(exampleId, name, file) {
+    try {
+      // Adresse affichable tout de suite ; elle est retraduite en clé « idb: » à l'enregistrement.
+      return await resolve(await putFile(`examples/${exampleId}/${name}`, file));
+    } catch (e) {
+      throw new DataError("Le navigateur refuse d'enregistrer ce fichier (espace plein ?).", e);
+    }
+  },
+  async createExample(input) {
+    const example: Example = {
+      ...input,
+      pages: input.pages.map((p) => ({ ...p, url: unresolve(p.url), thumb: unresolve(p.thumb) })),
+      pdfUrl: input.pdfUrl ? unresolve(input.pdfUrl) : null,
+      createdAt: new Date().toISOString(),
+    };
+    write(K.examples, [...read<Example[]>(K.examples, []), example]);
+    return resolveExample(example);
+  },
+  async updateExample(id, patch) {
+    // Les pages arrivent avec leurs adresses affichables : on remet les adresses enregistrées.
+    const stored: Partial<Example> = { ...patch };
+    if (patch.pages) stored.pages = patch.pages.map((p) => ({ ...p, url: unresolve(p.url), thumb: unresolve(p.thumb) }));
+    if (patch.pdfUrl) stored.pdfUrl = unresolve(patch.pdfUrl);
+    write(
+      K.examples,
+      read<Example[]>(K.examples, []).map((e) => (e.id === id ? { ...e, ...stored } : e)),
+    );
+  },
+  async deleteExampleFiles(_exampleId, urls) {
+    await Promise.all(urls.map(deleteFile));
+  },
+  async deleteExample(id) {
+    write(
+      K.examples,
+      read<Example[]>(K.examples, []).filter((e) => e.id !== id),
+    );
+    await deleteFiles(`examples/${id}/`);
+  },
+
+  async markOnboarded() {
+    markOnboardedHere("local");
   },
 };

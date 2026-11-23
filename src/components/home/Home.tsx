@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, FilePlus2, Loader2, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Compass, Copy, FilePlus2, Loader2, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { ExamplesSection } from "@/components/examples/ExamplesSection";
 import { Confirm } from "@/components/ui/Modal";
 import { FluidThumb, SlideThumb } from "@/components/slide/SlideView";
 import { useApp } from "@/lib/app";
 import { data, enterGuest } from "@/lib/backend";
-import { setLocalStaff } from "@/lib/backend/local";
+import { isOnboardedHere, setLocalStaff } from "@/lib/backend/local";
+import { startTour, useTour } from "@/lib/tour";
 import { cloneSlides } from "@/lib/ids";
 import { STARTER_TEMPLATES, firstSlide, resolveAvatarInSlides } from "@/lib/starter";
 import type { DeckMeta, Slide } from "@/lib/types";
@@ -133,6 +135,13 @@ function Dashboard() {
   const [creating, setCreating] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<DeckMeta | null>(null);
 
+  // Première connexion : la visite guidée démarre d'elle-même, une seule fois par compte.
+  useEffect(() => {
+    if (!profile || profile.onboarded || isOnboardedHere(profile.id) || useTour.getState().steps) return;
+    startTour("full", { name: profile.name, isStaff: profile.isStaff });
+    data.markOnboarded().catch(() => undefined);
+  }, [profile]);
+
   const fetchDecks = useCallback(
     () =>
       data.listDecks().catch((e: unknown) => {
@@ -195,11 +204,20 @@ function Dashboard() {
         <Brand />
         <div className="ml-auto flex items-center gap-3">
           {profile?.isStaff && (
-            <Link href="/admin" className="nb-btn sm" data-testid="admin-link">
+            <Link href="/admin" className="nb-btn sm" data-testid="admin-link" data-tour="admin">
               <ShieldCheck size={16} strokeWidth={2.8} />
               Panel admin
             </Link>
           )}
+          <button
+            className="nb-btn sm"
+            onClick={() => profile && startTour("full", { name: profile.name, isStaff: profile.isStaff })}
+            title="Revoir la visite guidée"
+            data-testid="replay-tour"
+          >
+            <Compass size={16} strokeWidth={2.8} />
+            Visite guidée
+          </button>
           <span className="flex items-center gap-2.5 rounded-full border-[2.5px] border-ink bg-white py-1 pl-1 pr-3.5 text-[14px] font-extrabold">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={avatar || "/library/avatar-defaut.svg"} alt="" className="h-8 w-8 rounded-full border-2 border-ink object-cover" />
@@ -258,7 +276,7 @@ function Dashboard() {
         </div>
       )}
 
-      <section>
+      <section data-tour="new-deck">
         <h2 className="display mb-3 text-[24px]">Nouvelle présentation</h2>
         <div className="scroll-thin flex gap-4 overflow-x-auto pb-3 pl-0.5 pt-0.5">
           <button
@@ -297,7 +315,9 @@ function Dashboard() {
         </div>
       </section>
 
-      <section className="flex-1">
+      <ExamplesSection />
+
+      <section className="flex-1" data-tour="my-decks">
         <h2 className="display mb-3 text-[24px]">Mes présentations</h2>
         {decks === null ? (
           <div className="flex items-center gap-3 py-10 text-[16px] font-extrabold">

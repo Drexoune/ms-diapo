@@ -1,4 +1,4 @@
-import type { Asset, AssetCategory, Deck, DeckMeta, El, Profile, Slide, Template, TemplateCategory } from "../types";
+import type { Asset, AssetCategory, Deck, DeckMeta, El, Example, ExamplePage, Profile, Slide, Template, TemplateCategory } from "../types";
 
 export interface NewAsset {
   category: AssetCategory;
@@ -17,6 +17,18 @@ export interface NewTemplate {
   category: TemplateCategory;
   slides: Slide[];
 }
+
+export interface NewExample {
+  /** Identifiant choisi avant l'envoi des fichiers (il sert de dossier). */
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  pages: ExamplePage[];
+  pdfUrl: string | null;
+}
+
+export type ExamplePatch = Partial<Pick<Example, "title" | "author" | "description" | "pages" | "pdfUrl">>;
 
 export interface UploadResult {
   url: string;
@@ -61,9 +73,27 @@ export interface DataApi {
   /** Identifiants des éléments du pack de départ masqués par le staff. */
   listHidden(): Promise<string[]>;
   setHidden(id: string, hidden: boolean): Promise<void>;
+  /** Noms donnés par le staff aux éléments et modèles du pack de départ (identifiant → nom). */
+  listBuiltinNames(): Promise<Record<string, string>>;
+  /** `null` rend son nom d'origine à l'élément. */
+  setBuiltinName(id: string, name: string | null): Promise<void>;
 
   /** `library` : image de bibliothèque (staff). `user` : image d'une présentation. */
   uploadImage(file: Blob, scope: "library" | "user"): Promise<UploadResult>;
+
+  /** Exemples : lecture pour tous, écriture réservée au staff. Du plus récent au plus ancien. */
+  listExamples(): Promise<Example[]>;
+  /** Range un fichier d'exemple (page, miniature, PDF d'origine) et renvoie son adresse. */
+  uploadExampleFile(exampleId: string, name: string, file: Blob): Promise<string>;
+  createExample(input: NewExample): Promise<Example>;
+  updateExample(id: string, patch: ExamplePatch): Promise<void>;
+  /** Supprime l'exemple et ses fichiers (sans erreur si l'exemple n'existe déjà plus). */
+  deleteExample(id: string): Promise<void>;
+  /** Supprime des fichiers d'un exemple (pages retirées), désignés par leur adresse. */
+  deleteExampleFiles(exampleId: string, urls: string[]): Promise<void>;
+
+  /** Note que la visite guidée a été proposée : elle ne se relancera plus d'elle-même. */
+  markOnboarded(): Promise<void>;
 }
 
 export class DataError extends Error {

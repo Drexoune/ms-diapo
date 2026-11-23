@@ -1,5 +1,6 @@
 "use client";
 
+import { Compass } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 
 const STEPS: [string, string][] = [
@@ -23,9 +24,18 @@ const KEYS: [string, string][] = [
   ["Échap", "Désélectionner"],
 ];
 
-export function HelpModal({ onClose }: { onClose: () => void }) {
+export function HelpModal({ onClose, onReplayTour }: { onClose: () => void; onReplayTour?: () => void }) {
   return (
     <Modal title="Aide" onClose={onClose} width={760}>
+      {onReplayTour && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[14px] border-[2.5px] border-ink bg-sun px-4 py-3">
+          <Compass size={22} strokeWidth={2.6} className="flex-none" />
+          <p className="min-w-[200px] flex-1 text-[14px] font-bold leading-snug">Envie d&apos;un rappel ? La visite guidée te remontre les outils de l&apos;éditeur, un par un.</p>
+          <button className="nb-btn sm" onClick={onReplayTour} data-testid="help-replay-tour">
+            Revoir la visite guidée
+          </button>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         {STEPS.map(([title, text], i) => (
           <div key={title} className="rounded-[14px] border-[2.5px] border-ink bg-[#fff7e6] p-3.5">

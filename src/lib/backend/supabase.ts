@@ -1,8 +1,9 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { uuid } from "../ids";
 import { prepareImage } from "../images";
-import type { Asset, Deck, DeckMeta, Profile, Slide, Template } from "../types";
+import type { Asset, Deck, DeckMeta, Example, ExamplePage, Profile, Slide, Template } from "../types";
 import { DataError, type DataApi } from "./api";
+import { isOnboardedHere, markOnboardedHere } from "./local";
 
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -14,6 +15,22 @@ export const STAFF_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 
 const BUCKET_LIBRARY = "library";
 const BUCKET_UPLOADS = "uploads";
+const BUCKET_EXAMPLES = "examples";
+
+/** Message affiché quand la rubrique Exemples est utilisée avant d'avoir créé sa table. */
+export const EXAMPLES_MIGRATION_HINT =
+  "La rubrique Exemples n'est pas encore activée dans Supabase : exécute supabase/migrations/20261118000000_exemples_et_visite.sql dans l'éditeur SQL.";
+
+/** La table ou l'espace de stockage des exemples n'existe pas encore (migration pas exécutée). */
+function isMissingExamples(error: { message?: string; code?: string } | null): boolean {
+  const msg = error?.message ?? "";
+  return error?.code === "PGRST205" || error?.code === "42P01" || /bucket not found/i.test(msg) || (/examples/.test(msg) && /(does not exist|schema cache)/.test(msg));
+}
+
+function failExamples(action: string, error: { message: string; code?: string } | null): never {
+  if (isMissingExamples(error)) throw new DataError(EXAMPLES_MIGRATION_HINT, error);
+  fail(action, error);
+}
 
 let client: SupabaseClient | null = null;
 
@@ -79,6 +96,26 @@ async function syncDiscordRole(session: Session): Promise<void> {
   }
 }
 
+interface ExampleRow {
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  pages: ExamplePage[];
+  pdf_url: string | null;
+  created_at: string;
+}
+
+const toExample = (r: ExampleRow): Example => ({
+  id: r.id,
+  title: r.title,
+  author: r.author ?? "",
+  description: r.description ?? "",
+  pages: Array.isArray(r.pages) ? r.pages : [],
+  pdfUrl: r.pdf_url,
+  createdAt: r.created_at,
+});
+
 export const supabaseApi: DataApi = {
   mode: "supabase",
 
@@ -89,7 +126,9 @@ export const supabaseApi: DataApi = {
     } = await sb.auth.getSession();
     if (!session) return null;
     await syncDiscordRole(session);
-    const { data } = await sb.from("profiles").select("id,name,avatar_url,is_staff,staff_checked_at").eq("id", session.user.id).maybeSingle();
+    // « * » plutôt qu'une liste : une colonne ajoutée par une migration pas encore exécutée
+    // (onboarded_at) ne doit pas faire échouer la lecture du profil, donc du rôle staff.
+    const { data } = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
     const meta = session.user.user_metadata ?? {};
     const checkedAt = data?.staff_checked_at ? Date.parse(data.staff_checked_at) : 0;
     const fresh = Date.now() - checkedAt < STAFF_MAX_AGE_MS;
@@ -99,6 +138,7 @@ export const supabaseApi: DataApi = {
       avatarUrl: data?.avatar_url || meta.avatar_url || null,
       isStaff: !!data?.is_staff && fresh,
       staffStale: !!data?.is_staff && !fresh,
+      onboarded: !!data?.onboarded_at || isOnboardedHere(session.user.id),
     };
   },
 
@@ -257,5 +297,92 @@ export const supabaseApi: DataApi = {
     const { error } = await sb.storage.from(bucket).upload(path, img.blob, { contentType: img.contentType, cacheControl: "31536000", upsert: false });
     if (error) fail("Envoi de l'image impossible", error);
     return { url: sb.storage.from(bucket).getPublicUrl(path).data.publicUrl, width: img.width, height: img.height };
+  },
+
+  async listExamples(): Promise<Example[]> {
+    const { data, error } = await getSupabase().from("examples").select("id,title,author,description,pages,pdf_url,created_at").order("created_at", { ascending: false });
+    if (error) failExamples("Chargement des exemples impossible", error);
+    return ((data ?? []) as ExampleRow[]).map(toExample);
+  },
+
+  async uploadExampleFile(exampleId, name, file) {
+    const sb = getSupabase();
+    const path = `${exampleId}/${name}`;
+    const { error } = await sb.storage.from(BUCKET_EXAMPLES).upload(path, file, { contentType: file.type || undefined, cacheControl: "31536000", upsert: false });
+    if (error) failExamples("Envoi du fichier impossible", error);
+    return sb.storage.from(BUCKET_EXAMPLES).getPublicUrl(path).data.publicUrl;
+  },
+
+  async createExample(input): Promise<Example> {
+    const { data, error } = await getSupabase()
+      .from("examples")
+      .insert({ id: input.id, title: input.title, author: input.author, description: input.description, pages: input.pages, pdf_url: input.pdfUrl })
+      .select("id,title,author,description,pages,pdf_url,created_at")
+      .single();
+    if (error || !data) failExamples("Publication de l'exemple impossible", error);
+    return toExample(data as ExampleRow);
+  },
+
+  async updateExample(id, patch) {
+    const { pdfUrl, ...rest } = patch;
+    const row = pdfUrl === undefined ? rest : { ...rest, pdf_url: pdfUrl };
+    const { error, count } = await getSupabase().from("examples").update(row, { count: "exact" }).eq("id", id);
+    if (error) failExamples("Modification impossible", error);
+    if (count === 0) throw new DataError("Modification refusée : le rôle staff doit être revérifié. Reconnecte-toi.");
+  },
+
+  async deleteExample(id) {
+    const sb = getSupabase();
+    const { error } = await sb.from("examples").delete().eq("id", id);
+    if (error && !isMissingExamples(error)) fail("Suppression impossible", error);
+    // Puis les fichiers : pages, miniatures et PDF d'origine, rangés dans un dossier à son nom.
+    const { data: files } = await sb.storage.from(BUCKET_EXAMPLES).list(id, { limit: 1000 });
+    if (files?.length) await sb.storage.from(BUCKET_EXAMPLES).remove(files.map((f) => `${id}/${f.name}`));
+  },
+
+  async deleteExampleFiles(exampleId, urls) {
+    const marker = `/object/public/${BUCKET_EXAMPLES}/`;
+    const paths = urls
+      .map((u) => {
+        const at = u.indexOf(marker);
+        return at >= 0 ? decodeURIComponent(u.slice(at + marker.length).split("?")[0]) : null;
+      })
+      // Uniquement les fichiers rangés dans le dossier de cet exemple.
+      .filter((p): p is string => !!p && p.startsWith(`${exampleId}/`));
+    if (!paths.length) return;
+    const { error } = await getSupabase().storage.from(BUCKET_EXAMPLES).remove(paths);
+    if (error) fail("Suppression des pages impossible", error);
+  },
+
+  async listBuiltinNames(): Promise<Record<string, string>> {
+    const { data, error } = await getSupabase().from("builtin_names").select("item_id,name");
+    // Migration pas encore exécutée : pas de renommage, sans bloquer la bibliothèque.
+    if (error) return {};
+    return Object.fromEntries((data ?? []).map((r) => [r.item_id as string, r.name as string]));
+  },
+
+  async setBuiltinName(id, name) {
+    const sb = getSupabase();
+    const { error } = name ? await sb.from("builtin_names").upsert({ item_id: id, name }) : await sb.from("builtin_names").delete().eq("item_id", id);
+    if (error) {
+      if (error.code === "PGRST205" || error.code === "42P01")
+        throw new DataError("Le renommage n'est pas encore activé dans Supabase : exécute supabase/migrations/20261123000000_renommage_pack.sql dans l'éditeur SQL.", error);
+      fail("Renommage impossible", error);
+    }
+  },
+
+  async markOnboarded() {
+    const {
+      data: { session },
+    } = await getSupabase().auth.getSession();
+    if (!session) return;
+    markOnboardedHere(session.user.id);
+    // Côté serveur, pour ne pas la reproposer sur un autre appareil. Sans la migration, le repère local suffit.
+    await getSupabase()
+      .rpc("mark_onboarded")
+      .then(
+        () => undefined,
+        () => undefined,
+      );
   },
 };

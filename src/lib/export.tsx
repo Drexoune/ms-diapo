@@ -64,9 +64,16 @@ export interface RenderOptions {
   onProgress?: (done: number, total: number) => void;
 }
 
-/** Rend les diapos en images (data: URI), une par diapo, dans l'ordre. */
-export async function renderSlides(slides: Slide[], opts: RenderOptions): Promise<string[]> {
-  const { toJpeg, toPng } = await import("html-to-image");
+/**
+ * Rend chaque diapo hors écran, puis la confie à `capture` (photographie en
+ * PNG, JPEG ou canevas). Une seule diapo existe à la fois dans la page.
+ */
+async function captureSlides<T>(
+  slides: Slide[],
+  capture: (node: HTMLElement, options: CaptureOptions) => Promise<T>,
+  pixelRatio: number,
+  onEach: (result: T, index: number, total: number) => Promise<void> | void,
+): Promise<void> {
   const fontEmbedCSS = await embeddedFontCss(usedFonts(slides));
   await document.fonts.ready;
 
@@ -76,7 +83,6 @@ export async function renderSlides(slides: Slide[], opts: RenderOptions): Promis
   host.setAttribute("aria-hidden", "true");
   document.body.appendChild(host);
   const root = createRoot(host);
-  const out: string[] = [];
 
   try {
     for (let i = 0; i < slides.length; i++) {
@@ -85,23 +91,53 @@ export async function renderSlides(slides: Slide[], opts: RenderOptions): Promis
       await nextFrame();
       const node = host.firstElementChild as HTMLElement;
       await waitForImages(node);
-      const options = {
+      const options: CaptureOptions = {
         width: SLIDE_W,
         height: SLIDE_H,
-        pixelRatio: opts.pixelRatio ?? 1,
+        pixelRatio,
         fontEmbedCSS,
         cacheBust: false,
         backgroundColor: "#ffffff",
         style: { opacity: "1" },
       };
-      out.push(opts.format === "png" ? await toPng(node, options) : await toJpeg(node, { ...options, quality: 0.92 }));
-      opts.onProgress?.(i + 1, slides.length);
+      await onEach(await capture(node, options), i, slides.length);
     }
   } finally {
     root.unmount();
     host.remove();
   }
+}
+
+interface CaptureOptions {
+  width: number;
+  height: number;
+  pixelRatio: number;
+  fontEmbedCSS: string;
+  cacheBust: boolean;
+  backgroundColor: string;
+  style: Partial<CSSStyleDeclaration>;
+}
+
+/** Rend les diapos en images (data: URI), une par diapo, dans l'ordre. */
+export async function renderSlides(slides: Slide[], opts: RenderOptions): Promise<string[]> {
+  const { toJpeg, toPng } = await import("html-to-image");
+  const out: string[] = [];
+  await captureSlides(
+    slides,
+    (node, options) => (opts.format === "png" ? toPng(node, options) : toJpeg(node, { ...options, quality: 0.92 })),
+    opts.pixelRatio ?? 1,
+    (img, i, total) => {
+      out.push(img);
+      opts.onProgress?.(i + 1, total);
+    },
+  );
   return out;
+}
+
+/** Rend les diapos une à une sur un canevas (1920 × 1080), confié à `onEach` avant de passer à la suivante. */
+export async function renderSlidesToCanvas(slides: Slide[], onEach: (canvas: HTMLCanvasElement, index: number, total: number) => Promise<void>): Promise<void> {
+  const { toCanvas } = await import("html-to-image");
+  await captureSlides(slides, (node, options) => toCanvas(node, options), 1, onEach);
 }
 
 export function safeFileName(title: string): string {

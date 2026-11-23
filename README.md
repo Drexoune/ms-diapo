@@ -5,6 +5,8 @@ L'éditeur de diapos de [MS Creators](https://ms-creators.com). On choisit un mo
 - **Éditeur** : textes à contour épais, étiquettes, cartes, images, formes ; glisser-déposer, guides d'alignement, annuler/rétablir, enregistrement automatique.
 - **Bibliothèque d'éléments** : titres, étiquettes, listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo.
 - **Modèles** : des diapos et des présentations complètes prêtes à remplir.
+- **Exemples** : d'anciennes présentations MS, déposées par le staff (PDF, images, ou présentation faite dans l'app), que tout le monde peut feuilleter page par page et télécharger en PDF — depuis l'accueil comme depuis l'éditeur.
+- **Visite guidée** : à la première connexion, un projecteur présente les outils un à un, de l'accueil à l'éditeur, jusqu'au bouton Aide. Elle se relance depuis l'aide ou le bouton « Visite guidée » de l'accueil.
 - **Mode invité** : « Essayer sans compte » ouvre l'éditeur sans Discord ; les présentations restent alors dans le navigateur.
 - **Connexion Discord** : chacun retrouve ses présentations ; le rôle `@staff` du serveur MS Creators ouvre le **panel admin**, qui permet d'ajouter des éléments à la bibliothèque et de nouveaux modèles.
 - **Export** PDF et PNG, **mode présentation** plein écran.
@@ -29,7 +31,14 @@ L'application est faite pour Vercel (site) et Supabase (comptes, base, fichiers)
 
 ### 1. Supabase
 
-1. Créer un projet, puis exécuter `supabase/migrations/20261115000000_init.sql` (éditeur SQL du tableau de bord, ou `supabase db push`). Le script crée les tables, les règles de sécurité et les deux espaces de stockage (`library`, `uploads`).
+1. Créer un projet, puis exécuter **dans l'ordre** les fichiers de `supabase/migrations/` (éditeur SQL du tableau de bord, ou `supabase db push`) :
+   - `20261115000000_init.sql` : tables, règles de sécurité, espaces de stockage `library` et `uploads` ;
+   - `20261118000000_exemples_et_visite.sql` : rubrique Exemples (table `examples`, espace de stockage `examples`) et mémoire de la visite guidée ;
+   - `20261123000000_renommage_pack.sql` : renommage des éléments et modèles du pack de départ (table `builtin_names`).
+
+   Ces deux derniers scripts peuvent être relancés sans risque.
+
+   Les fichiers de `supabase/tests/` ne s'exécutent **pas** sur Supabase : ce sont des tests locaux (voir plus bas).
 2. **Authentication → Providers → Discord** : activer, coller l'identifiant client et le secret de l'application Discord (étape 2).
 3. **Authentication → URL Configuration** : mettre l'adresse du site en *Site URL* et ajouter `https://<ton-site>/**` aux *Redirect URLs* (plus `http://localhost:3000/**` pour le développement).
 
@@ -62,6 +71,30 @@ Importer le dépôt et définir les variables d'environnement de `.env.example` 
 
 Pour retirer l'accès immédiatement : passer `is_staff` à `false` sur sa ligne de `profiles` dans le tableau de bord Supabase.
 
+## Rubrique Exemples
+
+Le staff dépose un exemple depuis l'accueil (« Ajouter un exemple ») ou le panel admin (onglet Exemples), à partir :
+
+- d'un **PDF** (export Figma, Canva, PowerPoint…) : chaque page est convertie en image dans le navigateur de la personne qui dépose, et le PDF d'origine est gardé pour le téléchargement (jusqu'à 50 Mo, le plafond par fichier de l'offre gratuite de Supabase) ;
+- d'**images** (une par diapo), rangées dans l'ordre naturel de leurs noms ;
+- d'une **présentation faite dans l'app**.
+
+Chaque page est stockée en WebP 1920 px de large plus une miniature, dans l'espace de stockage `examples`, sous un dossier au nom de l'exemple. Supprimer un exemple supprime ses fichiers.
+
+Depuis le panel admin, « Modifier » permet aussi de **réordonner** les pages (glisser, ou flèches), d'en **retirer** et d'en **ajouter** (PDF ou images, à la suite). Dès que les pages changent, le PDF d'origine n'est plus proposé : le téléchargement est alors fabriqué à partir des pages.
+
+## Panel admin : éléments et modèles
+
+Chaque élément de la bibliothèque et chaque modèle — ceux ajoutés par le staff comme ceux du pack de départ — peut être **renommé** ou **supprimé** pour tout le monde. Le pack de départ étant fourni par l'application, un élément du pack supprimé reste récupérable en bas de l'onglet (« supprimés — restaurer »), et un élément renommé peut retrouver son nom d'origine.
+
+La conversion des PDF utilise [pdf.js](https://mozilla.github.io/pdf.js/) : ses fichiers sont copiés dans `public/pdfjs` par `scripts/copy-pdfjs.mjs`, lancé automatiquement après `npm install` et avant `dev`/`build` (le dossier n'est pas versionné).
+
+## Visite guidée
+
+Les étapes sont décrites dans `src/lib/tour.ts` (texte, élément montré, page). Chaque élément montré porte un attribut `data-tour` ou `data-testid` ; une étape dont l'élément est introuvable affiche sa bulle au centre plutôt que de bloquer.
+
+La visite démarre seule tant que le profil n'a pas de date `onboarded_at` ; elle la remplit dès son lancement (fonction `mark_onboarded()`), et garde aussi un repère dans le navigateur pour le mode invité et le mode démo.
+
 ## Tests
 
 ```bash
@@ -82,7 +115,7 @@ npm run test:e2e
 
 Pilote l'application dans Chromium, en mode démo : création, édition, glisser-déposer, modèles, export, présentation, panel admin. Nécessite Playwright et une application qui tourne sur `http://localhost:3000` (ou `E2E_URL`).
 
-`tests/e2e/guest.cjs` vérifie le mode invité ; son en-tête explique comment le lancer (il lui faut une application construite avec les variables Supabase).
+Ce script enchaîne `tests/e2e/run.cjs` (tout le parcours, exemples compris) et `tests/e2e/tour.cjs` (visite guidée). `tests/e2e/guest.cjs` vérifie le mode invité ; son en-tête explique comment le lancer (il lui faut une application construite avec les variables Supabase).
 
 ## Organisation du code
 
@@ -92,6 +125,8 @@ src/
   components/
     slide/SlideView.tsx   LE rendu d'une diapo : éditeur, miniatures, présentation et export l'utilisent tous
     editor/               zone de travail, barre d'outils, panneaux, modèles, présentation
+    examples/             rubrique Exemples : cartes, visionneuse, dépôt
+    tour/                 visite guidée (projecteur et bulles)
     admin/                panel admin et formulaires du staff
     home/                 connexion et liste des présentations
   lib/
@@ -103,6 +138,8 @@ src/
     backend/              accès aux données : Supabase en production, navigateur en mode démo
     server/discord.ts     décision « staff ou non » à partir de la réponse de Discord
     export.tsx            export PDF / PNG
+    examples.ts           conversion PDF / images / présentation en pages d'exemple
+    tour.ts               étapes de la visite guidée ; tour-layout.ts : placement des bulles
 supabase/
   migrations/             schéma, règles de sécurité, stockage
   tests/                  tests des règles de sécurité

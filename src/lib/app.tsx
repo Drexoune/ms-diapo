@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { data } from "./backend";
 import { STARTER_ASSETS, STARTER_TEMPLATES, resolveAvatarInEls, resolveAvatarInSlides } from "./starter";
-import type { Asset, Profile, Template } from "./types";
+import type { Asset, Example, Profile, Template } from "./types";
 
 interface Toast {
   id: number;
@@ -23,8 +23,15 @@ interface AppCtx {
   customAssets: Asset[];
   customTemplates: Template[];
   hidden: Set<string>;
+  /** Noms donnés par le staff aux éléments et modèles du pack de départ. */
+  builtinNames: Record<string, string>;
   libraryReady: boolean;
   reloadLibrary: () => Promise<void>;
+  /** Exemples, du plus récent au plus ancien ; `null` tant qu'ils se chargent. */
+  examples: Example[] | null;
+  /** Les exemples n'ont pas pu être lus (par exemple : migration pas encore exécutée). */
+  examplesError: string | null;
+  reloadExamples: () => Promise<void>;
   toast: (text: string, kind?: Toast["kind"]) => void;
 }
 
@@ -33,9 +40,11 @@ const Ctx = createContext<AppCtx | null>(null);
 const fetchProfile = (): Promise<Profile | null> => data.getProfile().catch(() => null);
 
 const fetchLibrary = () =>
-  Promise.all([data.listAssets(), data.listTemplates(), data.listHidden()])
-    .then(([assets, templates, hidden]) => ({ assets, templates, hidden }))
+  Promise.all([data.listAssets(), data.listTemplates(), data.listHidden(), data.listBuiltinNames().catch(() => ({}))])
+    .then(([assets, templates, hidden, names]) => ({ assets, templates, hidden, names }))
     .catch((e: unknown) => (e instanceof Error ? e : new Error("Bibliothèque indisponible")));
+
+const fetchExamples = () => data.listExamples().catch((e: unknown) => (e instanceof Error ? e : new Error("Exemples indisponibles")));
 
 export function useApp(): AppCtx {
   const ctx = useContext(Ctx);
@@ -49,7 +58,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [customAssets, setCustomAssets] = useState<Asset[]>([]);
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [builtinNames, setBuiltinNames] = useState<Record<string, string>>({});
   const [libraryReady, setLibraryReady] = useState(false);
+  const [examples, setExamples] = useState<Example[] | null>(null);
+  const [examplesError, setExamplesError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextToast = useRef(1);
 
@@ -66,7 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyLibrary = useCallback(
-    (lib: { assets: Asset[]; templates: Template[]; hidden: string[] } | Error) => {
+    (lib: { assets: Asset[]; templates: Template[]; hidden: string[]; names: Record<string, string> } | Error) => {
       if (lib instanceof Error) {
         // Le pack de départ reste disponible même si la base ne répond pas.
         toast(lib.message || "Bibliothèque indisponible", "error");
@@ -74,48 +86,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCustomAssets(lib.assets);
         setCustomTemplates(lib.templates);
         setHidden(new Set(lib.hidden));
+        setBuiltinNames(lib.names);
       }
       setLibraryReady(true);
     },
     [toast],
   );
 
+  const applyExamples = useCallback((list: Example[] | Error) => {
+    if (list instanceof Error) {
+      // Pas de message intrusif : la rubrique affiche elle-même l'état (vide, ou à activer pour le staff).
+      setExamples([]);
+      setExamplesError(list.message);
+    } else {
+      setExamples(list);
+      setExamplesError(null);
+    }
+  }, []);
+
   const refreshProfile = useCallback(async () => applyProfile(await fetchProfile()), [applyProfile]);
   const reloadLibrary = useCallback(async () => applyLibrary(await fetchLibrary()), [applyLibrary]);
+  const reloadExamples = useCallback(async () => applyExamples(await fetchExamples()), [applyExamples]);
 
   useEffect(() => {
     let alive = true;
     const profileNow = () => fetchProfile().then((p) => alive && applyProfile(p));
     profileNow();
     fetchLibrary().then((lib) => alive && applyLibrary(lib));
+    fetchExamples().then((list) => alive && applyExamples(list));
     const stop = data.onAuthChange(profileNow);
     return () => {
       alive = false;
       stop();
     };
-  }, [applyProfile, applyLibrary]);
+  }, [applyProfile, applyLibrary, applyExamples]);
 
   const avatar = profile?.avatarUrl ?? null;
 
   const assets = useMemo(() => {
-    const all = [...STARTER_ASSETS.filter((a) => !hidden.has(a.id)), ...customAssets];
+    const all = [...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a)), ...customAssets];
     return all.map((a) => (a.kind === "elements" && a.elements ? { ...a, elements: resolveAvatarInEls(a.elements, avatar) } : a));
-  }, [customAssets, hidden, avatar]);
+  }, [customAssets, hidden, avatar, builtinNames]);
 
   const templates = useMemo(() => {
-    const all = [...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)), ...customTemplates];
+    const all = [...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map((t) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t)), ...customTemplates];
     return all.map((t) => ({ ...t, slides: resolveAvatarInSlides(t.slides, avatar) }));
-  }, [customTemplates, hidden, avatar]);
+  }, [customTemplates, hidden, avatar, builtinNames]);
 
   const value = useMemo<AppCtx>(
-    () => ({ profile, loading, refreshProfile, assets, templates, customAssets, customTemplates, hidden, libraryReady, reloadLibrary, toast }),
-    [profile, loading, refreshProfile, assets, templates, customAssets, customTemplates, hidden, libraryReady, reloadLibrary, toast],
+    () => ({
+      profile,
+      loading,
+      refreshProfile,
+      assets,
+      templates,
+      customAssets,
+      customTemplates,
+      hidden,
+      builtinNames,
+      libraryReady,
+      reloadLibrary,
+      examples,
+      examplesError,
+      reloadExamples,
+      toast,
+    }),
+    [profile, loading, refreshProfile, assets, templates, customAssets, customTemplates, hidden, builtinNames, libraryReady, reloadLibrary, examples, examplesError, reloadExamples, toast],
   );
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2" aria-live="polite">
+      <div className="pointer-events-none fixed bottom-5 left-1/2 z-[130] flex -translate-x-1/2 flex-col items-center gap-2" aria-live="polite">
         {toasts.map((t) => (
           <div
             key={t.id}

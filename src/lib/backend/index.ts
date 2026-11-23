@@ -1,5 +1,5 @@
 import { DataError, type DataApi } from "./api";
-import { localApi } from "./local";
+import { isOnboardedHere, localApi, markOnboardedHere } from "./local";
 import { supabaseApi, supabaseConfigured } from "./supabase";
 
 /**
@@ -38,7 +38,10 @@ const guestApi: DataApi = {
   ...localApi,
   mode: "guest",
   async getProfile() {
-    return { id: "guest", name: "Invité", avatarUrl: null, isStaff: false };
+    return { id: "guest", name: "Invité", avatarUrl: null, isStaff: false, onboarded: isOnboardedHere("guest") };
+  },
+  async markOnboarded() {
+    markOnboardedHere("guest");
   },
   async signIn() {
     leaveGuest();
@@ -51,7 +54,16 @@ const guestApi: DataApi = {
   listAssets: () => supabaseApi.listAssets().catch(() => []),
   listTemplates: () => supabaseApi.listTemplates().catch(() => []),
   listHidden: () => supabaseApi.listHidden().catch(() => []),
+  listBuiltinNames: () => supabaseApi.listBuiltinNames().catch(() => ({})),
+  setBuiltinName: staffOnly,
+  deleteExampleFiles: staffOnly,
   getTemplate: (id) => supabaseApi.getTemplate(id).catch(() => null),
+  // Les exemples du site, consultables par tous.
+  listExamples: () => supabaseApi.listExamples(),
+  uploadExampleFile: staffOnly,
+  createExample: staffOnly,
+  updateExample: staffOnly,
+  deleteExample: staffOnly,
   createAsset: staffOnly,
   updateAsset: staffOnly,
   deleteAsset: staffOnly,
@@ -85,5 +97,6 @@ export const data: DataApi = new Proxy({} as DataApi, {
 });
 
 export { supabaseConfigured };
+export { EXAMPLES_MIGRATION_HINT } from "./supabase";
 export { DataError } from "./api";
-export type { DataApi, NewAsset, NewTemplate, UploadResult } from "./api";
+export type { DataApi, ExamplePatch, NewAsset, NewExample, NewTemplate, UploadResult } from "./api";

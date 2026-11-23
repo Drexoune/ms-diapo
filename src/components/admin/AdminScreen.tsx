@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, RotateCcw, ShieldAlert, Trash2 } from "lucide-react";
+import { ExamplesAdmin } from "./ExamplesAdmin";
 import { CategorySelect, UploadAssetsModal, parseTags } from "./forms";
 import { AssetThumb } from "@/components/editor/LibraryPanel";
 import { Confirm, Modal } from "@/components/ui/Modal";
@@ -19,7 +20,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Une erreur 
 /** Panel admin (staff) : gérer les éléments de bibliothèque et les modèles. */
 export function AdminScreen() {
   const { profile, loading } = useApp();
-  const [tab, setTab] = useState<"assets" | "templates">("assets");
+  const [tab, setTab] = useState<"assets" | "templates" | "examples">("assets");
 
   if (loading) {
     return (
@@ -64,47 +65,119 @@ export function AdminScreen() {
             <Layers size={15} strokeWidth={2.8} />
             Modèles
           </button>
+          <button className={"chip " + (tab === "examples" ? "on" : "")} onClick={() => setTab("examples")} data-testid="admin-tab-examples">
+            <BookOpen size={15} strokeWidth={2.8} />
+            Exemples
+          </button>
         </div>
       </header>
-      {tab === "assets" ? <AssetsAdmin /> : <TemplatesAdmin />}
+      {tab === "assets" ? <AssetsAdmin /> : tab === "templates" ? <TemplatesAdmin /> : <ExamplesAdmin />}
     </div>
   );
 }
 
-function HideButton({ id, hidden }: { id: string; hidden: boolean }) {
-  const { reloadLibrary, toast } = useApp();
+/** Renommer un élément ou un modèle : du pack de départ (nom remplacé) ou ajouté par le staff. */
+function RenameModal({ title, current, original, onSave, onClose }: { title: string; current: string; original?: string; onSave: (name: string | null) => Promise<void>; onClose: () => void }) {
+  const { toast } = useApp();
+  const [name, setName] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const save = async (value: string | null) => {
+    setBusy(true);
+    try {
+      await onSave(value);
+      onClose();
+    } catch (e) {
+      toast(errorText(e), "error");
+      setBusy(false);
+    }
+  };
   return (
-    <button
-      className="nb-btn sm"
-      onClick={async () => {
-        try {
-          await data.setHidden(id, !hidden);
-          await reloadLibrary();
-        } catch (e) {
-          toast(errorText(e), "error");
-        }
-      }}
-      title={hidden ? "Remettre dans la bibliothèque" : "Retirer de la bibliothèque sans le supprimer"}
+    <Modal
+      title={title}
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <button className="nb-btn" onClick={onClose}>
+            Annuler
+          </button>
+          <button className="nb-btn sun" disabled={!name.trim() || busy} onClick={() => save(original !== undefined && name.trim() === original ? null : name.trim())} data-testid="rename-save">
+            Enregistrer
+          </button>
+        </>
+      }
     >
-      {hidden ? <Eye size={14} strokeWidth={2.8} /> : <EyeOff size={14} strokeWidth={2.8} />}
-      {hidden ? "Afficher" : "Masquer"}
-    </button>
+      <label className="flex flex-col gap-1.5 text-[13px] font-extrabold">
+        Nouveau nom
+        <input
+          className="nb-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && name.trim() && !busy && save(original !== undefined && name.trim() === original ? null : name.trim())}
+          maxLength={80}
+          autoFocus
+          data-testid="rename-input"
+        />
+      </label>
+      {original !== undefined && current !== original && (
+        <button className="mt-3 text-[13px] font-bold text-muted underline hover:text-ink" onClick={() => save(null)} disabled={busy}>
+          Revenir au nom d&apos;origine : « {original} »
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+/** Éléments du pack de départ supprimés : récupérables, au cas où. */
+function DeletedBuiltins({ items, kind }: { items: { id: string; name: string }[]; kind: string }) {
+  const { reloadLibrary, toast } = useApp();
+  if (!items.length) return null;
+  return (
+    <details className="rounded-[14px] border-[2.5px] border-dashed border-ink bg-white px-4 py-3" data-testid="deleted-builtins">
+      <summary className="cursor-pointer text-[14px] font-extrabold">
+        {items.length} {kind} du pack de départ supprimé{items.length > 1 ? "s" : ""} — restaurer
+      </summary>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            className="nb-btn sm"
+            onClick={async () => {
+              try {
+                await data.setHidden(it.id, false);
+                await reloadLibrary();
+                toast(`« ${it.name} » est de retour`, "ok");
+              } catch (e) {
+                toast(errorText(e), "error");
+              }
+            }}
+            data-restore={it.id}
+          >
+            <RotateCcw size={14} strokeWidth={2.8} />
+            {it.name}
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 
 /* ───────────── Éléments de bibliothèque ───────────── */
 
 function AssetsAdmin() {
-  const { customAssets, hidden, reloadLibrary, toast, profile } = useApp();
+  const { customAssets, hidden, builtinNames, reloadLibrary, toast, profile } = useApp();
   const [category, setCategory] = useState<AssetCategory | "all">("all");
   const [upload, setUpload] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
+  const [renaming, setRenaming] = useState<Asset | null>(null);
   const [toDelete, setToDelete] = useState<Asset | null>(null);
 
+  const named = (a: Asset) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a);
   const list = useMemo(() => {
-    const all = [...customAssets, ...STARTER_ASSETS];
+    const all = [...customAssets, ...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a))];
     return category === "all" ? all : all.filter((a) => a.category === category);
-  }, [customAssets, category]);
+  }, [customAssets, category, hidden, builtinNames]);
+  const deleted = STARTER_ASSETS.filter((a) => hidden.has(a.id)).map(named);
 
   const avatar = profile?.avatarUrl ?? null;
 
@@ -131,10 +204,9 @@ function AssetsAdmin() {
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-4" data-testid="admin-assets">
         {list.map((a) => {
-          const isHidden = hidden.has(a.id);
           const shown = a.kind === "elements" && a.elements ? { ...a, elements: a.elements.map((el) => (el.type === "image" && el.src === "{avatar}" ? { ...el, src: avatar || "/library/avatar-defaut.svg" } : el)) } : a;
           return (
-            <div key={a.id} className={"flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111] " + (isHidden ? "opacity-55" : "")} data-asset-id={a.id}>
+            <div key={a.id} className="flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111]" data-asset-id={a.id}>
               <div className="overflow-hidden rounded-[9px] border-2 border-ink" style={{ background: "radial-gradient(circle at 50% 45%, #ffecc4, #ffcf8a)" }}>
                 <div className="flex justify-center">
                   <AssetThumb asset={shown} width={186} height={112} />
@@ -144,28 +216,37 @@ function AssetsAdmin() {
               <div className="mb-2 text-[12px] font-semibold text-muted">
                 {ASSET_CATEGORIES.find((c) => c.id === a.category)?.label} · {a.builtin ? "pack de départ" : "ajouté par le staff"}
               </div>
-              <div className="mt-auto flex gap-2">
-                {a.builtin ? (
-                  <HideButton id={a.id} hidden={isHidden} />
-                ) : (
-                  <>
-                    <button className="nb-btn sm" onClick={() => setEditing(a)}>
-                      <Pencil size={14} strokeWidth={2.8} />
-                      Modifier
-                    </button>
-                    <button className="nb-btn sm" onClick={() => setToDelete(a)} aria-label="Supprimer" title="Supprimer">
-                      <Trash2 size={14} strokeWidth={2.8} />
-                    </button>
-                  </>
-                )}
+              <div className="mt-auto flex flex-wrap gap-2">
+                <button className="nb-btn sm" onClick={() => (a.builtin ? setRenaming(a) : setEditing(a))} data-testid="asset-rename">
+                  <Pencil size={14} strokeWidth={2.8} />
+                  Renommer
+                </button>
+                <button className="nb-btn sm" onClick={() => setToDelete(a)} data-testid="asset-delete">
+                  <Trash2 size={14} strokeWidth={2.8} />
+                  Supprimer
+                </button>
               </div>
             </div>
           );
         })}
       </div>
 
+      <DeletedBuiltins items={deleted} kind="élément" />
+
       {upload && <UploadAssetsModal category={category === "all" ? "stickers" : category} onClose={() => setUpload(false)} />}
       {editing && <EditAssetModal asset={editing} onClose={() => setEditing(null)} />}
+      {renaming && (
+        <RenameModal
+          title="Renommer l'élément"
+          current={renaming.name}
+          original={STARTER_ASSETS.find((x) => x.id === renaming.id)?.name}
+          onSave={async (name) => {
+            await data.setBuiltinName(renaming.id, name);
+            await reloadLibrary();
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      )}
       {toDelete && (
         <Confirm
           title="Supprimer cet élément ?"
@@ -174,7 +255,8 @@ function AssetsAdmin() {
           danger
           onConfirm={async () => {
             try {
-              await data.deleteAsset(toDelete.id);
+              if (toDelete.builtin) await data.setHidden(toDelete.id, true);
+              else await data.deleteAsset(toDelete.id);
               toast("Élément supprimé");
               await reloadLibrary();
             } catch (e) {
@@ -196,7 +278,7 @@ function EditAssetModal({ asset, onClose }: { asset: Asset; onClose: () => void 
   const [busy, setBusy] = useState(false);
   return (
     <Modal
-      title="Modifier l'élément"
+      title="Renommer l'élément"
       onClose={onClose}
       width={480}
       footer={
@@ -246,10 +328,11 @@ function EditAssetModal({ asset, onClose }: { asset: Asset; onClose: () => void 
 
 function TemplatesAdmin() {
   const router = useRouter();
-  const { customTemplates, hidden, reloadLibrary, toast, profile } = useApp();
+  const { customTemplates, hidden, builtinNames, reloadLibrary, toast, profile } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [toDelete, setToDelete] = useState<Template | null>(null);
+  const [renaming, setRenaming] = useState<Template | null>(null);
   const avatar = profile?.avatarUrl ?? null;
 
   const create = async (kind: "slide" | "deck") => {
@@ -269,7 +352,9 @@ function TemplatesAdmin() {
     }
   };
 
-  const list = [...customTemplates, ...STARTER_TEMPLATES];
+  const named = (t: Template) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t);
+  const list = [...customTemplates, ...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map(named)];
+  const deleted = STARTER_TEMPLATES.filter((t) => hidden.has(t.id)).map(named);
 
   return (
     <>
@@ -292,9 +377,8 @@ function TemplatesAdmin() {
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4" data-testid="admin-templates">
         {list.map((t) => {
-          const isHidden = hidden.has(t.id);
           return (
-            <div key={t.id} className={"flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111] " + (isHidden ? "opacity-55" : "")} data-template-id={t.id}>
+            <div key={t.id} className="flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111]" data-template-id={t.id}>
               <div className="overflow-hidden rounded-[9px] border-2 border-ink">
                 <FluidThumb slide={resolveAvatarInSlides(t.slides.slice(0, 1), avatar)[0]} />
               </div>
@@ -304,13 +388,19 @@ function TemplatesAdmin() {
                 {t.builtin ? "pack de départ" : "ajouté par le staff"}
               </div>
               <div className="mt-auto flex flex-wrap items-center gap-2">
+                <button className="nb-btn sm" onClick={() => setRenaming(t)} data-testid="template-rename">
+                  <Pencil size={14} strokeWidth={2.8} />
+                  Renommer
+                </button>
                 {t.builtin ? (
-                  <HideButton id={t.id} hidden={isHidden} />
+                  <button className="nb-btn sm" onClick={() => setToDelete(t)} aria-label="Supprimer" title="Supprimer" data-testid="template-delete">
+                    <Trash2 size={14} strokeWidth={2.8} />
+                  </button>
                 ) : (
                   <>
                     <Link href={`/modele/${t.id}`} className="nb-btn sm sun">
-                      <Pencil size={14} strokeWidth={2.8} />
-                      Modifier
+                      <Layers size={14} strokeWidth={2.8} />
+                      Ouvrir
                     </Link>
                     {t.kind === "slide" && (
                       <select
@@ -344,7 +434,22 @@ function TemplatesAdmin() {
         })}
       </div>
 
+      <DeletedBuiltins items={deleted} kind="modèle" />
+
       {importing && <ImportDeckModal onClose={() => setImporting(false)} />}
+      {renaming && (
+        <RenameModal
+          title="Renommer le modèle"
+          current={renaming.name}
+          original={renaming.builtin ? STARTER_TEMPLATES.find((x) => x.id === renaming.id)?.name : undefined}
+          onSave={async (name) => {
+            if (renaming.builtin) await data.setBuiltinName(renaming.id, name);
+            else await data.updateTemplate(renaming.id, { name: name ?? renaming.name });
+            await reloadLibrary();
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      )}
       {toDelete && (
         <Confirm
           title="Supprimer ce modèle ?"
@@ -353,7 +458,8 @@ function TemplatesAdmin() {
           danger
           onConfirm={async () => {
             try {
-              await data.deleteTemplate(toDelete.id);
+              if (toDelete.builtin) await data.setHidden(toDelete.id, true);
+              else await data.deleteTemplate(toDelete.id);
               toast("Modèle supprimé");
               await reloadLibrary();
             } catch (e) {
