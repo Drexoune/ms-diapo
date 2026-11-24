@@ -357,6 +357,21 @@ button:disabled {
   background: var(--bullet-fill, #fff);
   box-shadow: 0 0 0 var(--bullet-border, 0px) var(--bullet-stroke, #000);
 }
+/* Lettres en dégradé : chaque ligne ne fait que la largeur de son texte, et porte le dégradé. */
+.tx-fill > div {
+  width: fit-content;
+  max-width: 100%;
+  background-image: var(--fill);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tx-fill-center > div {
+  margin-inline: auto;
+}
+.tx-fill-right > div {
+  margin-left: auto;
+}
 .tx-editing {
   user-select: text;
   -webkit-user-select: text;

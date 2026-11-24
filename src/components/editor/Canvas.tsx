@@ -14,6 +14,7 @@ import {
   resizeRect,
   round1,
   scaleEl,
+  scaleTextEffects,
   snapAngle,
   snapLines,
   snapMove,
@@ -290,18 +291,7 @@ export function Canvas({ onDropAsset, onDropFiles }: CanvasDropHandlers) {
                   w: r.w,
                   h: s0.fixedH ? r.h : el.h,
                   size,
-                  stroke: round1(s0.stroke * s),
-                  shadow: round1(s0.shadow * s),
-                  box: s0.box
-                    ? {
-                        ...s0.box,
-                        radius: round1(s0.box.radius * s),
-                        border: round1(s0.box.border * s),
-                        shadow: round1(s0.box.shadow * s),
-                        padX: round1(s0.box.padX * s),
-                        padY: round1(s0.box.padY * s),
-                      }
-                    : s0.box,
+                  ...(({ stroke, shadow, glow, dy, box }) => ({ stroke, shadow, glow, dy, box }))(scaleTextEffects(s0, s, round1)),
                 }
               : el,
           { history: false },
@@ -584,6 +574,8 @@ export function resizeFont(el: El, size: number): El {
     size,
     stroke: el.stroke > 0 ? Math.max(1, round1(el.stroke * s)) : 0,
     shadow: el.shadow > 0 ? Math.max(1, round1(el.shadow * s)) : 0,
+    glow: el.glow ? { ...el.glow, y: round1(el.glow.y * s), blur: round1(el.glow.blur * s) } : el.glow,
+    dy: el.dy ? round1(el.dy * s) : el.dy,
   };
 }
 

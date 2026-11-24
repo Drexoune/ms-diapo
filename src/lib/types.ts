@@ -12,6 +12,7 @@ export const SLIDE_H = 1080;
 
 export type FontId =
   | "titre"
+  | "etiquette"
   | "unbounded"
   | "bowlby"
   | "passion"
@@ -34,6 +35,13 @@ export interface BaseEl {
   opacity?: number;
 }
 
+/** Ombre floue (douce), vers le bas : décalage, flou et opacité du noir. */
+export interface SoftShadow {
+  y: number;
+  blur: number;
+  opacity: number;
+}
+
 /** Fond d'étiquette derrière un texte (bordure épaisse + ombre dure, façon MS). */
 export interface BoxStyle {
   /** Couleur CSS ou dégradé. */
@@ -45,6 +53,8 @@ export interface BoxStyle {
   shadow: number;
   padX: number;
   padY: number;
+  /** Ombre floue à la place de l'ombre dure. */
+  soft?: SoftShadow | null;
 }
 
 export interface TextEl extends BaseEl {
@@ -66,6 +76,12 @@ export interface TextEl extends BaseEl {
   /** Affiche une puce devant chaque ligne. */
   list: boolean;
   box?: BoxStyle | null;
+  /** Remplissage en dégradé des lettres (CSS) ; prend le pas sur `color`, sauf pour les mots colorés. */
+  fill?: string | null;
+  /** Ombre floue sous les lettres. */
+  glow?: SoftShadow | null;
+  /** Décalage vertical des lettres dans leur cadre (px), pour un placement au pixel près. */
+  dy?: number;
   /** Hauteur fixée à la main (texte centré verticalement) ; sinon la hauteur suit le contenu. */
   fixedH?: boolean;
 }

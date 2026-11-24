@@ -3,7 +3,7 @@
 L'éditeur de diapos de [MS Creators](https://ms-creators.com). On choisit un modèle, on écrit son texte, on présente — le tout aux couleurs de MS, sans rien connaître au design.
 
 - **Éditeur** : textes à contour épais, étiquettes, cartes, images, formes ; glisser-déposer, guides d'alignement, annuler/rétablir, enregistrement automatique.
-- **Bibliothèque d'éléments** : titres, étiquettes, listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo.
+- **Bibliothèque d'éléments** : titres, étiquettes (dont les badges doré, cuivré et vert, au texte en dégradé), listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo. Tous les textes s'écrivent au double-clic.
 - **Modèles** : des diapos et des présentations complètes prêtes à remplir.
 - **Exemples** : d'anciennes présentations MS, déposées par le staff (PDF, images, ou présentation faite dans l'app), que tout le monde peut feuilleter page par page et télécharger en PDF — depuis l'accueil comme depuis l'éditeur.
 - **Visite guidée** : à la première connexion, un projecteur présente les outils un à un, de l'accueil à l'éditeur, jusqu'au bouton Aide. Elle se relance depuis l'aide ou le bouton « Visite guidée » de l'accueil.

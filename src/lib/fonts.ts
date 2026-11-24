@@ -46,6 +46,23 @@ export const FONTS: FontDef[] = [
     ],
   },
   {
+    // Même police que « MS Titre », à sa largeur normale et à peine resserrée :
+    // c'est celle des étiquettes dorées, cuivrées et vertes (mesurée au pixel).
+    id: "etiquette",
+    label: "MS Étiquette",
+    family: "MS Titre",
+    weight: 900,
+    stretch: "101%",
+    ls: -0.005,
+    ws: 0,
+    faceWeight: "100 900",
+    faceStretch: "62% 125%",
+    files: [
+      { url: "/fonts/archivo-latin-wdth-normal.woff2", range: LATIN },
+      { url: "/fonts/archivo-latin-ext-wdth-normal.woff2", range: LATIN_EXT },
+    ],
+  },
+  {
     id: "unbounded",
     label: "Unbounded",
     family: "MS Unbounded",
@@ -124,8 +141,12 @@ export function fontDef(id: FontId): FontDef {
 /** Règles @font-face ; `resolve` permet de remplacer chaque URL (par ex. par un data: URI pour l'export). */
 export function fontFaceCss(resolve: (url: string) => string = (u) => u, only?: Set<FontId>): string {
   let css = "";
+  const done = new Set<string>();
   for (const f of FONTS) {
     if (only && !only.has(f.id)) continue;
+    // Deux réglages d'une même police partagent ses fichiers : déclarés une fois.
+    if (done.has(f.family)) continue;
+    done.add(f.family);
     for (const file of f.files) {
       css +=
         `@font-face{font-family:'${f.family}';font-style:normal;font-display:swap;` +

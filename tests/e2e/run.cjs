@@ -244,6 +244,26 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   check((await els().count()) === 8, "glisser un sticker le dépose");
   await page.fill('input[aria-label="Chercher dans la bibliothèque"]', "podium");
   check((await page.locator("[data-asset-id]").count()) === 1 && (await page.locator('[data-asset-id="b:podium"]').count()) === 1, "la recherche trouve un élément dans toutes les catégories");
+  // Badges dorés, cuivrés, verts : texte modifiable, dégradé conservé.
+  await page.fill('input[aria-label="Chercher dans la bibliothèque"]', "badge");
+  check(
+    (await page.locator('[data-asset-id="b:badge-dore"], [data-asset-id="b:badge-cuivre"], [data-asset-id="b:badge-vert"]').count()) === 3,
+    "les trois badges sont dans la bibliothèque",
+  );
+  await page.click('[data-asset-id="b:badge-dore"]');
+  check((await els().count()) === 9, "un badge se pose d'un clic");
+  const badge = texts().last();
+  const bc = center(await badge.boundingBox());
+  await page.mouse.dblclick(bc.x, bc.y);
+  await page.waitForSelector('.tx[contenteditable="true"]');
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Top 1");
+  await page.keyboard.press("Escape");
+  await saved();
+  const badgeEl = (await storedDeck()).slides[1].els.at(-1);
+  check(badgeEl.html === "<div>Top 1</div>" && badgeEl.fill?.startsWith("linear-gradient") && badgeEl.box?.fill, "le texte d'un badge s'écrit au double-clic, dégradé et fond gardés", badgeEl.html);
+  await page.keyboard.press("Delete");
+  check((await els().count()) === 8, "… et le badge se retire");
   await page.fill('input[aria-label="Chercher dans la bibliothèque"]', "");
   await page.getByRole("tab", { name: "Fonds" }).click();
   await page.click('[data-asset-id="b:fond-bleu-croix"]');

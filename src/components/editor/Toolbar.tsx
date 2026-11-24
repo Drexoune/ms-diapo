@@ -40,19 +40,7 @@ import type { BoxStyle, El, FontId, ImageEl, ShapeEl, TextEl } from "@/lib/types
 
 const Sep = () => <div className="mx-1 h-7 w-[2px] flex-none rounded bg-line" />;
 
-function IconBtn({
-  title,
-  on,
-  onClick,
-  children,
-  danger,
-}: {
-  title: string;
-  on?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  danger?: boolean;
-}) {
+function IconBtn({ title, on, onClick, children, danger }: { title: string; on?: boolean; onClick: () => void; children: React.ReactNode; danger?: boolean }) {
   return (
     <button
       className={"ic-btn " + (on ? "on " : "") + (danger ? "text-[#c92a2a] " : "")}
@@ -70,10 +58,7 @@ function IconBtn({
 
 function MenuItem({ icon, label, onClick, on }: { icon: React.ReactNode; label: string; onClick: () => void; on?: boolean }) {
   return (
-    <button
-      className={"flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[14px] font-bold hover:bg-[#fff1cf] " + (on ? "bg-sun" : "")}
-      onClick={onClick}
-    >
+    <button className={"flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[14px] font-bold hover:bg-[#fff1cf] " + (on ? "bg-sun" : "")} onClick={onClick}>
       <span className="flex w-5 justify-center">{icon}</span>
       {label}
     </button>
@@ -158,7 +143,8 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
             value={t0.color}
             onPick={(c) => {
               if (!c) return;
-              if (!colorSelection(c)) patchText((el) => ({ ...el, color: c }), "color");
+              // Une couleur pour tout le texte remplace un éventuel dégradé.
+              if (!colorSelection(c)) patchText((el) => ({ ...el, color: c, fill: null }), "color");
             }}
           />
           <button
@@ -174,11 +160,14 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
             Contour
           </button>
           <Sep />
-          <IconBtn
-            title="Alignement du texte"
-            onClick={() => patchText((el) => ({ ...el, align: el.align === "left" ? "center" : el.align === "center" ? "right" : "left" }))}
-          >
-            {t0.align === "left" ? <AlignLeft size={18} strokeWidth={2.6} /> : t0.align === "center" ? <AlignCenter size={18} strokeWidth={2.6} /> : <AlignRight size={18} strokeWidth={2.6} />}
+          <IconBtn title="Alignement du texte" onClick={() => patchText((el) => ({ ...el, align: el.align === "left" ? "center" : el.align === "center" ? "right" : "left" }))}>
+            {t0.align === "left" ? (
+              <AlignLeft size={18} strokeWidth={2.6} />
+            ) : t0.align === "center" ? (
+              <AlignCenter size={18} strokeWidth={2.6} />
+            ) : (
+              <AlignRight size={18} strokeWidth={2.6} />
+            )}
           </IconBtn>
           <IconBtn title="Liste à puces" on={t0.list} onClick={() => patchText((el) => ({ ...el, list: !t0.list, align: !t0.list ? "left" : el.align }))}>
             <List size={18} strokeWidth={2.6} />
@@ -219,7 +208,11 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
                       Bordure
                       <div className="flex gap-1">
                         {[0, 5, 8].map((b) => (
-                          <button key={b} className={"chip !px-2.5 !py-1 !text-[12px] " + (t0.box!.border === b ? "on" : "")} onClick={() => patchBox((box) => ({ ...box, border: b }))}>
+                          <button
+                            key={b}
+                            className={"chip !px-2.5 !py-1 !text-[12px] " + (t0.box!.border === b ? "on" : "")}
+                            onClick={() => patchBox((box) => ({ ...box, border: b }))}
+                          >
                             {b === 0 ? "Sans" : b === 5 ? "Fine" : "Épaisse"}
                           </button>
                         ))}
@@ -229,7 +222,11 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
                       Ombre
                       <div className="flex gap-1">
                         {[0, 10].map((b) => (
-                          <button key={b} className={"chip !px-2.5 !py-1 !text-[12px] " + ((t0.box!.shadow > 0) === (b > 0) ? "on" : "")} onClick={() => patchBox((box) => ({ ...box, shadow: b }))}>
+                          <button
+                            key={b}
+                            className={"chip !px-2.5 !py-1 !text-[12px] " + ((t0.box!.shadow > 0 || !!t0.box!.soft) === b > 0 ? "on" : "")}
+                            onClick={() => patchBox((box) => ({ ...box, shadow: b, soft: null }))}
+                          >
                             {b === 0 ? "Sans" : "Avec"}
                           </button>
                         ))}
@@ -282,13 +279,22 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
             <Plus size={17} strokeWidth={3} />
           </IconBtn>
           {s0.shape === "rect" && (
-            <button className="ic-btn" title="Coins : droits, arrondis, très arrondis" onClick={() => patchShape((el) => ({ ...el, radius: el.radius === 0 ? 12 : el.radius <= 12 ? 36 : 0 }))}>
+            <button
+              className="ic-btn"
+              title="Coins : droits, arrondis, très arrondis"
+              onClick={() => patchShape((el) => ({ ...el, radius: el.radius === 0 ? 12 : el.radius <= 12 ? 36 : 0 }))}
+            >
               <SquareRoundCorner size={18} strokeWidth={2.6} />
               Coins
             </button>
           )}
           {s0.shape !== "arrow" && (
-            <button className={"ic-btn " + (s0.shadow > 0 ? "on" : "")} title="Ombre dure" aria-pressed={s0.shadow > 0} onClick={() => patchShape((el) => ({ ...el, shadow: s0.shadow > 0 ? 0 : 14 }))}>
+            <button
+              className={"ic-btn " + (s0.shadow > 0 ? "on" : "")}
+              title="Ombre dure"
+              aria-pressed={s0.shadow > 0}
+              onClick={() => patchShape((el) => ({ ...el, shadow: s0.shadow > 0 ? 0 : 14 }))}
+            >
               Ombre
             </button>
           )}
@@ -321,7 +327,13 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
             title={i0.radius >= 9999 ? "Forme : ronde" : i0.radius > 0 ? "Forme : coins arrondis" : "Forme : coins droits"}
             onClick={() => patchImage((el) => ({ ...el, radius: el.radius === 0 ? 14 : el.radius < 9999 ? 9999 : 0 }))}
           >
-            {i0.radius >= 9999 ? <Circle size={18} strokeWidth={2.8} /> : i0.radius > 0 ? <SquareRoundCorner size={18} strokeWidth={2.6} /> : <Square size={18} strokeWidth={2.8} />}
+            {i0.radius >= 9999 ? (
+              <Circle size={18} strokeWidth={2.8} />
+            ) : i0.radius > 0 ? (
+              <SquareRoundCorner size={18} strokeWidth={2.6} />
+            ) : (
+              <Square size={18} strokeWidth={2.8} />
+            )}
           </IconBtn>
           <button className={"ic-btn " + (i0.border > 0 ? "on" : "")} onClick={() => patchImage((el) => ({ ...el, border: i0.border > 0 ? 0 : 8 }))} title="Bordure noire">
             Bordure
@@ -377,12 +389,7 @@ export function Toolbar({ isStaff, onSaveToLibrary, onReplaceImage }: { isStaff:
             <MenuItem icon={<AlignHorizontalJustifyCenter size={16} />} label="Centrer dans la largeur" onClick={() => st().align(ids, "center")} />
             <MenuItem icon={<AlignVerticalJustifyCenter size={16} />} label="Centrer dans la hauteur" onClick={() => st().align(ids, "middle")} />
             <div className="my-1.5 h-[2px] bg-line" />
-            <MenuItem
-              icon={<Pin size={16} />}
-              label="Reprendre sur les nouvelles diapos"
-              on={kept}
-              onClick={() => st().updateEls(ids, (el: El) => ({ ...el, keep: !kept }))}
-            />
+            <MenuItem icon={<Pin size={16} />} label="Reprendre sur les nouvelles diapos" on={kept} onClick={() => st().updateEls(ids, (el: El) => ({ ...el, keep: !kept }))} />
             <div className="flex items-center gap-2.5 px-2.5 py-2 text-[14px] font-bold">
               Opacité
               <input

@@ -145,6 +145,23 @@ addElements("etiquettes", "nom-dore", "Nom doré", ["nom", "doré", "présentate
 addElements("etiquettes", "bandeau-dore", "Bandeau doré", ["bandeau", "doré", "note"], [
   gold("Une précision importante à garder en tête, sur une ou deux lignes", 0, 0, 1700, 46),
 ]);
+// Badges : texte en dégradé, ombres douces. Mesurés au pixel sur les maquettes MS (cadre 263 × 80).
+const badge = (fill: string, text: [string, string, string]): TextEl =>
+  t("Texte", 0, 0, 263, 62, {
+    outlined: false,
+    font: "etiquette",
+    h: 80,
+    fixedH: true,
+    lh: 1.04,
+    color: text[1],
+    fill: `linear-gradient(90deg, ${text[0]} 0%, ${text[1]} 40%, ${text[1]} 60%, ${text[2]} 100%)`,
+    glow: { y: 3, blur: 4, opacity: 0.3 },
+    dy: 2,
+    box: makeBox({ fill, radius: 7, border: 0, shadow: 0, padX: 0, padY: 0, soft: { y: 4, blur: 4, opacity: 0.25 } }),
+  });
+addElements("etiquettes", "badge-dore", "Badge doré", ["badge", "doré", "or", "étiquette"], [badge("rgba(128, 106, 0, 0.69)", ["#d1ab54", "#ffeb87", "#d3ad55"])]);
+addElements("etiquettes", "badge-cuivre", "Badge cuivré", ["badge", "cuivre", "marron", "étiquette"], [badge("#725432", ["#9e6a30", "#d89346", "#a06b30"])]);
+addElements("etiquettes", "badge-vert", "Badge vert", ["badge", "vert", "étiquette"], [badge("#defff0", ["#24784b", "#43b379", "#267a4d"])]);
 addElements("etiquettes", "pastille", "Pastille noire", ["pastille", "tag", "pdf"], [pill("PDF", 0, 0, 130)]);
 addElements("etiquettes", "pastille-verte", "Pastille verte", ["pastille", "tag"], [pill("À retenir", 0, 0, 230, PALETTE.forest)]);
 addElements(

@@ -1,4 +1,4 @@
-import type { El } from "./types";
+import type { El, SoftShadow, TextEl } from "./types";
 
 export interface Pt {
   x: number;
@@ -161,6 +161,30 @@ export function resizeRect(start: RotRect, handle: Handle, delta: Pt, opts: Resi
  * sélection multiple, ou d'un texte par un coin). Les épaisseurs suivent pour
  * que l'aspect reste identique.
  */
+const scaleSoft = (g: SoftShadow | null | undefined, s: number) => (g ? { ...g, y: g.y * s, blur: g.blur * s } : g);
+
+/** Épaisseurs et ombres d'un texte (et de son étiquette) mises à l'échelle `s`. */
+export function scaleTextEffects<T extends TextEl>(el: T, s: number, round: (n: number) => number = (n) => n): T {
+  return {
+    ...el,
+    stroke: round(el.stroke * s),
+    shadow: round(el.shadow * s),
+    glow: scaleSoft(el.glow, s),
+    dy: el.dy ? el.dy * s : el.dy,
+    box: el.box
+      ? {
+          ...el.box,
+          radius: round(el.box.radius * s),
+          border: round(el.box.border * s),
+          shadow: round(el.box.shadow * s),
+          padX: round(el.box.padX * s),
+          padY: round(el.box.padY * s),
+          soft: scaleSoft(el.box.soft, s),
+        }
+      : el.box,
+  };
+}
+
 export function scaleEl(el: El, anchor: Pt, s: number): El {
   const c = center(el);
   const w = el.w * s;
@@ -168,24 +192,7 @@ export function scaleEl(el: El, anchor: Pt, s: number): El {
   const cx = anchor.x + (c.x - anchor.x) * s;
   const cy = anchor.y + (c.y - anchor.y) * s;
   const base = { ...el, x: cx - w / 2, y: cy - h / 2, w, h };
-  if (base.type === "text") {
-    return {
-      ...base,
-      size: Math.max(6, base.size * s),
-      stroke: base.stroke * s,
-      shadow: base.shadow * s,
-      box: base.box
-        ? {
-            ...base.box,
-            radius: base.box.radius * s,
-            border: base.box.border * s,
-            shadow: base.box.shadow * s,
-            padX: base.box.padX * s,
-            padY: base.box.padY * s,
-          }
-        : base.box,
-    };
-  }
+  if (base.type === "text") return { ...scaleTextEffects(base, s), size: Math.max(6, base.size * s) };
   return {
     ...base,
     radius: base.radius >= 9999 ? base.radius : base.radius * s,

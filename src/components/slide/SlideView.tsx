@@ -3,7 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { fontDef } from "@/lib/fonts";
 import { normalizeEditable, safeHtml } from "@/lib/text";
-import { SLIDE_H, SLIDE_W, type Background, type El, type ImageEl, type ShapeEl, type Slide, type TextEl } from "@/lib/types";
+import { SLIDE_H, SLIDE_W, type Background, type El, type ImageEl, type ShapeEl, type Slide, type SoftShadow, type TextEl } from "@/lib/types";
 
 /**
  * Rendu d'une diapo. C'est l'unique endroit où une diapo est dessinée :
@@ -13,6 +13,8 @@ import { SLIDE_H, SLIDE_W, type Background, type El, type ImageEl, type ShapeEl,
 
 /** Ombre dure façon MS Creators : vers le bas-gauche. */
 const boxShadow = (len: number) => (len > 0 ? `${-len}px ${len}px 0 #000` : undefined);
+const softDrop = (g: SoftShadow) => `drop-shadow(0 ${g.y}px ${g.blur / 2}px rgba(0,0,0,${g.opacity}))`;
+const softBox = (g: SoftShadow) => `0 ${g.y}px ${g.blur}px rgba(0,0,0,${g.opacity})`;
 const textShadow = (len: number) => (len > 0 ? `drop-shadow(${-len * 0.7}px ${len}px 0 #000)` : undefined);
 
 function frameStyle(el: El, autoHeight: boolean): CSSProperties {
@@ -40,7 +42,11 @@ export function textStyle(el: TextEl): CSSProperties {
     textAlign: el.align,
     textTransform: el.upper ? "uppercase" : "none",
     WebkitTextStroke: el.stroke > 0 ? `${el.stroke * 2}px ${el.strokeColor}` : undefined,
-    filter: textShadow(el.shadow),
+    filter: [textShadow(el.shadow), el.glow ? softDrop(el.glow) : undefined].filter(Boolean).join(" ") || undefined,
+    position: el.dy ? "relative" : undefined,
+    top: el.dy || undefined,
+    // Dégradé des lettres : posé sur chaque ligne (voir .tx-fill), pour couvrir le texte d'un bord à l'autre.
+    ["--fill" as string]: el.fill || undefined,
     // Variables lues par les puces de liste (pseudo-éléments).
     ["--lh" as string]: el.lh,
     ["--bullet-fill" as string]: el.color,
@@ -127,7 +133,7 @@ function TextView({ el, edit }: { el: TextEl; edit?: EditHooks }) {
         background: box.fill,
         border: box.border > 0 ? `${box.border}px solid ${box.borderColor}` : undefined,
         borderRadius: box.radius,
-        boxShadow: boxShadow(box.shadow),
+        boxShadow: box.soft ? softBox(box.soft) : boxShadow(box.shadow),
         padding: `${box.padY}px ${box.padX}px`,
       }
     : {};
@@ -137,7 +143,7 @@ function TextView({ el, edit }: { el: TextEl; edit?: EditHooks }) {
       <div className={"tx-box" + (auto ? "" : " tx-fixed")} style={boxStyle}>
         <div
           ref={txRef}
-          className={"tx" + (el.list ? " tx-list" : "") + (editing ? " tx-editing" : "")}
+          className={"tx" + (el.list ? " tx-list" : "") + (el.fill ? ` tx-fill tx-fill-${el.align}` : "") + (editing ? " tx-editing" : "")}
           style={textStyle(el)}
           contentEditable={editing}
           suppressContentEditableWarning
