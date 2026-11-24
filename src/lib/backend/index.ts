@@ -56,6 +56,8 @@ const guestApi: DataApi = {
   listHidden: () => supabaseApi.listHidden().catch(() => []),
   listBuiltinNames: () => supabaseApi.listBuiltinNames().catch(() => ({})),
   setBuiltinName: staffOnly,
+  listBuiltinContents: () => supabaseApi.listBuiltinContents().catch(() => ({})),
+  setBuiltinContent: staffOnly,
   deleteExampleFiles: staffOnly,
   getTemplate: (id) => supabaseApi.getTemplate(id).catch(() => null),
   // Les exemples du site, consultables par tous.

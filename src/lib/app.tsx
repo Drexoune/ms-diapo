@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { data } from "./backend";
 import { STARTER_ASSETS, STARTER_TEMPLATES, resolveAvatarInEls, resolveAvatarInSlides } from "./starter";
-import type { Asset, Example, Profile, Template } from "./types";
+import type { Asset, El, Example, Profile, Template } from "./types";
 
 interface Toast {
   id: number;
@@ -25,6 +25,8 @@ interface AppCtx {
   hidden: Set<string>;
   /** Noms donnés par le staff aux éléments et modèles du pack de départ. */
   builtinNames: Record<string, string>;
+  /** Contenus (textes réécrits) des éléments du pack de départ. */
+  builtinContents: Record<string, El[]>;
   libraryReady: boolean;
   reloadLibrary: () => Promise<void>;
   /** Exemples, du plus récent au plus ancien ; `null` tant qu'ils se chargent. */
@@ -40,11 +42,18 @@ const Ctx = createContext<AppCtx | null>(null);
 const fetchProfile = (): Promise<Profile | null> => data.getProfile().catch(() => null);
 
 const fetchLibrary = () =>
-  Promise.all([data.listAssets(), data.listTemplates(), data.listHidden(), data.listBuiltinNames().catch(() => ({}))])
-    .then(([assets, templates, hidden, names]) => ({ assets, templates, hidden, names }))
+  Promise.all([data.listAssets(), data.listTemplates(), data.listHidden(), data.listBuiltinNames().catch(() => ({})), data.listBuiltinContents().catch(() => ({}))])
+    .then(([assets, templates, hidden, names, contents]) => ({ assets, templates, hidden, names, contents }))
     .catch((e: unknown) => (e instanceof Error ? e : new Error("Bibliothèque indisponible")));
 
 const fetchExamples = () => data.listExamples().catch((e: unknown) => (e instanceof Error ? e : new Error("Exemples indisponibles")));
+
+/** Élément du pack de départ tel que le staff l'a renommé ou réécrit. */
+export function applyBuiltin(a: Asset, names: Record<string, string>, contents: Record<string, El[]>): Asset {
+  const name = names[a.id];
+  const elements = a.kind === "elements" ? contents[a.id] : undefined;
+  return name || elements ? { ...a, ...(name ? { name } : {}), ...(elements ? { elements } : {}) } : a;
+}
 
 export function useApp(): AppCtx {
   const ctx = useContext(Ctx);
@@ -59,6 +68,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [builtinNames, setBuiltinNames] = useState<Record<string, string>>({});
+  const [builtinContents, setBuiltinContents] = useState<Record<string, El[]>>({});
   const [libraryReady, setLibraryReady] = useState(false);
   const [examples, setExamples] = useState<Example[] | null>(null);
   const [examplesError, setExamplesError] = useState<string | null>(null);
@@ -78,7 +88,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyLibrary = useCallback(
-    (lib: { assets: Asset[]; templates: Template[]; hidden: string[]; names: Record<string, string> } | Error) => {
+    (lib: { assets: Asset[]; templates: Template[]; hidden: string[]; names: Record<string, string>; contents: Record<string, El[]> } | Error) => {
       if (lib instanceof Error) {
         // Le pack de départ reste disponible même si la base ne répond pas.
         toast(lib.message || "Bibliothèque indisponible", "error");
@@ -87,6 +97,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCustomTemplates(lib.templates);
         setHidden(new Set(lib.hidden));
         setBuiltinNames(lib.names);
+        setBuiltinContents(lib.contents);
       }
       setLibraryReady(true);
     },
@@ -124,9 +135,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const avatar = profile?.avatarUrl ?? null;
 
   const assets = useMemo(() => {
-    const all = [...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a)), ...customAssets];
+    const all = [...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => applyBuiltin(a, builtinNames, builtinContents)), ...customAssets];
     return all.map((a) => (a.kind === "elements" && a.elements ? { ...a, elements: resolveAvatarInEls(a.elements, avatar) } : a));
-  }, [customAssets, hidden, avatar, builtinNames]);
+  }, [customAssets, hidden, avatar, builtinNames, builtinContents]);
 
   const templates = useMemo(() => {
     const all = [...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map((t) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t)), ...customTemplates];
@@ -144,6 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customTemplates,
       hidden,
       builtinNames,
+      builtinContents,
       libraryReady,
       reloadLibrary,
       examples,
@@ -151,7 +163,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reloadExamples,
       toast,
     }),
-    [profile, loading, refreshProfile, assets, templates, customAssets, customTemplates, hidden, builtinNames, libraryReady, reloadLibrary, examples, examplesError, reloadExamples, toast],
+    [profile, loading, refreshProfile, assets, templates, customAssets, customTemplates, hidden, builtinNames, builtinContents, libraryReady, reloadLibrary, examples, examplesError, reloadExamples, toast],
   );
 
   return (

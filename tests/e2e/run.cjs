@@ -454,6 +454,52 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   await page.waitForFunction(() => !("b:eclair" in JSON.parse(localStorage.getItem("msd:builtin-names") || "{}")));
   check((await page.locator('[data-asset-id="b:eclair"]').innerText()).includes("Éclair"), "… et peut lui rendre son nom d'origine");
 
+  // Réécrire les textes d'éléments du pack de départ.
+  const contents = () => page.evaluate(() => JSON.parse(localStorage.getItem("msd:builtin-contents") || "{}"));
+  const fields = page.locator('[data-testid="asset-text-field"]');
+  await page.locator('[data-asset-id="b:titre-gros"] [data-testid="asset-texts"]').click();
+  check((await fields.count()) === 1, "« Textes » ouvre un champ par texte de l'élément");
+  await fields.first().click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Mon super titre");
+  check((await page.locator('[data-testid="asset-texts-preview"]').innerText()).toLowerCase().includes("mon super titre"), "l'aperçu suit la frappe");
+  await page.keyboard.press("Control+A");
+  await page.keyboard.press("Delete");
+  check(await page.locator('[data-testid="asset-texts-save"]').isDisabled(), "un texte vidé ne peut pas être enregistré");
+  await page.keyboard.type("Mon super titre");
+  await page.click('[data-testid="asset-texts-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:builtin-contents") || "{}")["b:titre-gros"]);
+  check((await contents())["b:titre-gros"][0].html === "<div>Mon super titre</div>", "le staff réécrit le texte d'un élément du pack de départ");
+  check((await page.locator('[data-asset-id="b:titre-gros"]').innerText()).toLowerCase().includes("mon super titre"), "… et la carte montre le nouveau texte");
+
+  await page.locator('[data-asset-id="b:titre-nom"] [data-testid="asset-texts"]').click();
+  check((await fields.count()) === 2, "un bloc à deux textes a deux champs");
+  await fields.first().click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Clément");
+  await fields.nth(1).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("en trois lignes");
+  await page.click('[data-testid="asset-texts-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:builtin-contents") || "{}")["b:titre-nom"]);
+  const nomBloc = (await contents())["b:titre-nom"].filter((e) => e.type === "text").map((e) => e.html);
+  check(nomBloc.includes("<div>Clément</div>") && nomBloc.some((h) => h === "<div>Titre de la</div><div>présentation</div><div>en trois lignes</div>"), "plusieurs textes, et des lignes ajoutées avec Entrée", nomBloc.join(" | "));
+
+  await page.locator('[data-asset-id="b:mot-jaune"] [data-testid="asset-texts"]').click();
+  await fields.first().click();
+  await page.keyboard.press("Control+Home");
+  await page.keyboard.type("Oui, ");
+  await page.click('[data-testid="asset-texts-save"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:builtin-contents") || "{}")["b:mot-jaune"]);
+  const jaune = (await contents())["b:mot-jaune"][0].html;
+  check(jaune.startsWith("<div>Oui, Tu es un ") && jaune.includes('<span style="color:#ffd23f">chef d\'entreprise</span>'), "le mot en couleur garde sa couleur", jaune);
+
+  await page.locator('[data-asset-id="b:titre-gros"] [data-testid="asset-texts"]').click();
+  await page.click('[data-testid="asset-texts-restore"]');
+  await page.waitForFunction(() => !("b:titre-gros" in JSON.parse(localStorage.getItem("msd:builtin-contents") || "{}")));
+  check((await page.locator('[data-asset-id="b:titre-gros"]').innerText()).toLowerCase().includes("gros titre"), "« Revenir aux textes d'origine » rétablit l'élément");
+
   // Renommer puis supprimer complètement un élément ajouté par le staff.
   const customCard = page.locator(`[data-asset-id="${asset.id}"]`);
   await customCard.locator('[data-testid="asset-rename"]').click();
@@ -491,6 +537,13 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   check((await page.locator('[data-testid="library"]').getByText("Triangle rouge").count()) === 1, "l'image ajoutée (et renommée) apparaît dans la bibliothèque de l'éditeur");
   check((await page.locator('[data-asset-id="b:etoile"]').innerText()).includes("Étoile MS"), "le nouveau nom d'un élément du pack s'y affiche aussi");
   check((await page.locator('[data-asset-id="b:coeur"]').count()) === 0, "l'élément supprimé n'y est plus");
+  await page.getByRole("tab", { name: "Titres" }).click();
+  check((await page.locator('[data-asset-id="b:titre-nom"]').innerText()).toLowerCase().includes("clément"), "les textes réécrits s'affichent dans la bibliothèque de l'éditeur");
+  const elsBefore = await page.locator('[data-testid="stage"] .el-text').count();
+  await page.click('[data-asset-id="b:titre-nom"]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid="stage"] .el-text').length === n + 2, elsBefore);
+  check((await page.locator('[data-testid="stage"]').innerText()).toLowerCase().includes("clément"), "… et c'est ce texte qui arrive sur la diapo");
+  await page.keyboard.press("Control+z");
   await page.click('[data-testid="open-templates"]');
   await page.waitForSelector('[data-testid="template-grid"]');
   check(
@@ -508,6 +561,18 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:assets") || "[]").length === 2);
   const block = (await stored("msd:assets"))[1];
   check(block.kind === "elements" && block.elements.length === 1 && block.elements[0].x === 0 && block.elements[0].y === 0, "une sélection devient un élément de bibliothèque, recalé à l'origine");
+  const backTo = page.url();
+  await page.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
+  await page.locator(`[data-asset-id="${block.id}"] [data-testid="asset-texts"]`).click();
+  await page.locator('[data-testid="asset-text-field"]').first().click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Texte maison réécrit");
+  await shot("textes");
+  await page.click('[data-testid="asset-texts-save"]');
+  await page.waitForFunction((id) => JSON.parse(localStorage.getItem("msd:assets")).find((a) => a.id === id).elements[0].html === "<div>Texte maison réécrit</div>", block.id);
+  check(true, "le staff réécrit aussi le texte d'un élément qu'il a ajouté");
+  await page.goto(backTo, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="stage"] .el-text');
 
   await page.click('[data-testid="open-templates"]');
   await page.click('[data-testid="save-slide-template"]');

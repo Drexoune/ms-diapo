@@ -1,7 +1,7 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { uuid } from "../ids";
 import { prepareImage } from "../images";
-import type { Asset, Deck, DeckMeta, Example, ExamplePage, Profile, Slide, Template } from "../types";
+import type { Asset, Deck, DeckMeta, El, Example, ExamplePage, Profile, Slide, Template } from "../types";
 import { DataError, type DataApi } from "./api";
 import { isOnboardedHere, markOnboardedHere } from "./local";
 
@@ -368,6 +368,23 @@ export const supabaseApi: DataApi = {
       if (error.code === "PGRST205" || error.code === "42P01")
         throw new DataError("Le renommage n'est pas encore activé dans Supabase : exécute supabase/migrations/20261123000000_renommage_pack.sql dans l'éditeur SQL.", error);
       fail("Renommage impossible", error);
+    }
+  },
+
+  async listBuiltinContents(): Promise<Record<string, El[]>> {
+    const { data, error } = await getSupabase().from("builtin_contents").select("item_id,elements");
+    // Migration pas encore exécutée : contenus d'origine, sans bloquer la bibliothèque.
+    if (error) return {};
+    return Object.fromEntries((data ?? []).filter((r) => Array.isArray(r.elements)).map((r) => [r.item_id as string, r.elements as El[]]));
+  },
+
+  async setBuiltinContent(id, elements) {
+    const sb = getSupabase();
+    const { error } = elements ? await sb.from("builtin_contents").upsert({ item_id: id, elements }) : await sb.from("builtin_contents").delete().eq("item_id", id);
+    if (error) {
+      if (error.code === "PGRST205" || error.code === "42P01")
+        throw new DataError("La modification des textes n'est pas encore activée dans Supabase : exécute supabase/migrations/20261124000000_textes_pack.sql dans l'éditeur SQL.", error);
+      fail("Enregistrement des textes impossible", error);
     }
   },
 

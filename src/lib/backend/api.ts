@@ -61,7 +61,7 @@ export interface DataApi {
   /** Éléments ajoutés par le staff (le pack de départ est fourni par l'application). */
   listAssets(): Promise<Asset[]>;
   createAsset(input: NewAsset): Promise<Asset>;
-  updateAsset(id: string, patch: Partial<Pick<Asset, "name" | "category" | "tags">>): Promise<void>;
+  updateAsset(id: string, patch: Partial<Pick<Asset, "name" | "category" | "tags" | "elements">>): Promise<void>;
   deleteAsset(id: string): Promise<void>;
 
   listTemplates(): Promise<Template[]>;
@@ -77,6 +77,10 @@ export interface DataApi {
   listBuiltinNames(): Promise<Record<string, string>>;
   /** `null` rend son nom d'origine à l'élément. */
   setBuiltinName(id: string, name: string | null): Promise<void>;
+  /** Contenu réécrit par le staff des éléments du pack de départ (identifiant → éléments). */
+  listBuiltinContents(): Promise<Record<string, El[]>>;
+  /** `null` rend son contenu d'origine à l'élément. */
+  setBuiltinContent(id: string, elements: El[] | null): Promise<void>;
 
   /** `library` : image de bibliothèque (staff). `user` : image d'une présentation. */
   uploadImage(file: Blob, scope: "library" | "user"): Promise<UploadResult>;

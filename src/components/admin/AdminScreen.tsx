@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, RotateCcw, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, RotateCcw, ShieldAlert, Trash2, Type } from "lucide-react";
 import { ExamplesAdmin } from "./ExamplesAdmin";
+import { TextsModal, textsOf } from "./TextsModal";
 import { CategorySelect, UploadAssetsModal, parseTags } from "./forms";
 import { AssetThumb } from "@/components/editor/LibraryPanel";
 import { Confirm, Modal } from "@/components/ui/Modal";
 import { FluidThumb } from "@/components/slide/SlideView";
-import { useApp } from "@/lib/app";
+import { applyBuiltin, useApp } from "@/lib/app";
 import { data } from "@/lib/backend";
 import { cloneSlides } from "@/lib/ids";
 import { STARTER_ASSETS, STARTER_TEMPLATES, firstSlide, resolveAvatarInSlides, tokenizeAvatarInSlides } from "@/lib/starter";
@@ -165,18 +166,19 @@ function DeletedBuiltins({ items, kind }: { items: { id: string; name: string }[
 /* ───────────── Éléments de bibliothèque ───────────── */
 
 function AssetsAdmin() {
-  const { customAssets, hidden, builtinNames, reloadLibrary, toast, profile } = useApp();
+  const { customAssets, hidden, builtinNames, builtinContents, reloadLibrary, toast, profile } = useApp();
   const [category, setCategory] = useState<AssetCategory | "all">("all");
   const [upload, setUpload] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
   const [renaming, setRenaming] = useState<Asset | null>(null);
+  const [writing, setWriting] = useState<Asset | null>(null);
   const [toDelete, setToDelete] = useState<Asset | null>(null);
 
-  const named = (a: Asset) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a);
+  const named = (a: Asset) => applyBuiltin(a, builtinNames, builtinContents);
   const list = useMemo(() => {
-    const all = [...customAssets, ...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => (builtinNames[a.id] ? { ...a, name: builtinNames[a.id] } : a))];
+    const all = [...customAssets, ...STARTER_ASSETS.filter((a) => !hidden.has(a.id)).map((a) => applyBuiltin(a, builtinNames, builtinContents))];
     return category === "all" ? all : all.filter((a) => a.category === category);
-  }, [customAssets, category, hidden, builtinNames]);
+  }, [customAssets, category, hidden, builtinNames, builtinContents]);
   const deleted = STARTER_ASSETS.filter((a) => hidden.has(a.id)).map(named);
 
   const avatar = profile?.avatarUrl ?? null;
@@ -217,6 +219,12 @@ function AssetsAdmin() {
                 {ASSET_CATEGORIES.find((c) => c.id === a.category)?.label} · {a.builtin ? "pack de départ" : "ajouté par le staff"}
               </div>
               <div className="mt-auto flex flex-wrap gap-2">
+                {textsOf(a.elements).length > 0 && (
+                  <button className="nb-btn sm sun" onClick={() => setWriting(a)} title="Réécrire les textes de cet élément" data-testid="asset-texts">
+                    <Type size={14} strokeWidth={2.8} />
+                    Textes
+                  </button>
+                )}
                 <button className="nb-btn sm" onClick={() => (a.builtin ? setRenaming(a) : setEditing(a))} data-testid="asset-rename">
                   <Pencil size={14} strokeWidth={2.8} />
                   Renommer
@@ -235,6 +243,19 @@ function AssetsAdmin() {
 
       {upload && <UploadAssetsModal category={category === "all" ? "stickers" : category} onClose={() => setUpload(false)} />}
       {editing && <EditAssetModal asset={editing} onClose={() => setEditing(null)} />}
+      {writing?.elements && (
+        <TextsModal
+          name={writing.name}
+          elements={writing.elements}
+          canRestore={!!writing.builtin && !!builtinContents[writing.id]}
+          onSave={async (elements) => {
+            if (writing.builtin) await data.setBuiltinContent(writing.id, elements);
+            else await data.updateAsset(writing.id, { elements: elements ?? writing.elements });
+            await reloadLibrary();
+          }}
+          onClose={() => setWriting(null)}
+        />
+      )}
       {renaming && (
         <RenameModal
           title="Renommer l'élément"

@@ -1,6 +1,6 @@
 import { uuid } from "../ids";
 import { blobToDataUrl, prepareImage } from "../images";
-import type { Asset, Deck, DeckMeta, Example, Profile, Template } from "../types";
+import type { Asset, Deck, DeckMeta, El, Example, Profile, Template } from "../types";
 import { DataError, type DataApi } from "./api";
 import { deleteFile, deleteFiles, putFile, resolve, unresolve } from "./files";
 
@@ -18,6 +18,7 @@ const K = {
   staff: "msd:staff",
   examples: "msd:examples",
   builtinNames: "msd:builtin-names",
+  builtinContents: "msd:builtin-contents",
 };
 
 /* ───────────── Visite guidée ─────────────
@@ -168,6 +169,15 @@ export const localApi: DataApi = {
     if (name) names[id] = name;
     else delete names[id];
     write(K.builtinNames, names);
+  },
+  async listBuiltinContents() {
+    return read<Record<string, El[]>>(K.builtinContents, {});
+  },
+  async setBuiltinContent(id, elements) {
+    const contents = read<Record<string, El[]>>(K.builtinContents, {});
+    if (elements) contents[id] = elements;
+    else delete contents[id];
+    write(K.builtinContents, contents);
   },
   async listHidden() {
     return read<string[]>(K.hidden, []);

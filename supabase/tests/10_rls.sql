@@ -170,6 +170,26 @@ select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
 select pg_temp.must_touch('A (staff) rend son nom d''origine', $$delete from public.builtin_names$$, 1);
 select pg_temp.must_touch('A (staff) retire une page d''exemple du stockage', $$delete from storage.objects where bucket_id = 'examples'$$, 1);
 
+-- ── Textes réécrits du pack de départ ──
+select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.must_touch('A (staff) réécrit les textes d''un élément du pack', $$insert into public.builtin_contents (item_id, elements) values ('b:titre-gros', '[{"type":"text","html":"<div>Mon titre</div>"}]')$$, 1);
+select pg_temp.must_touch('A (staff) les réécrit encore', $$update public.builtin_contents set elements = '[{"type":"text","html":"<div>Autre</div>"}]'$$, 1);
+select pg_temp.must_fail('contrainte : une liste d''éléments non vide', $$insert into public.builtin_contents (item_id, elements) values ('b:question', '[]')$$);
+select pg_temp.must_fail('contrainte : une liste, pas un objet', $$insert into public.builtin_contents (item_id, elements) values ('b:question', '{}')$$);
+select pg_temp.must_fail('contrainte : seulement le pack de départ', $$insert into public.builtin_contents (item_id, elements) values ('autre', '[{}]')$$);
+select pg_temp.act_as('bbbbbbbb-0000-0000-0000-000000000002');
+select pg_temp.must_count('B lit les textes réécrits', 'select 1 from public.builtin_contents', 1);
+select pg_temp.must_fail('B ne peut pas réécrire de textes', $$insert into public.builtin_contents (item_id, elements) values ('b:question', '[{}]')$$);
+select pg_temp.must_touch('B ne peut pas modifier des textes', $$update public.builtin_contents set elements = '[{}]'$$, 0);
+select pg_temp.must_touch('B ne peut pas effacer des textes', $$delete from public.builtin_contents$$, 0);
+select pg_temp.act_as('cccccccc-0000-0000-0000-000000000003');
+select pg_temp.must_fail('C (staff périmé) ne peut pas réécrire de textes', $$insert into public.builtin_contents (item_id, elements) values ('b:question', '[{}]')$$);
+select pg_temp.act_as('anon');
+select pg_temp.must_count('anonyme lit les textes réécrits', 'select 1 from public.builtin_contents', 1);
+select pg_temp.must_fail('anonyme ne peut pas réécrire de textes', $$insert into public.builtin_contents (item_id, elements) values ('b:question', '[{}]')$$);
+select pg_temp.act_as('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.must_touch('A (staff) rend son texte d''origine', $$delete from public.builtin_contents$$, 1);
+
 -- ── Visite guidée : chacun ne marque que son propre profil ──
 select pg_temp.act_as('bbbbbbbb-0000-0000-0000-000000000002');
 select pg_temp.must_count('avant : la visite de B n''est pas marquée', 'select 1 from public.profiles where onboarded_at is null', 1);
