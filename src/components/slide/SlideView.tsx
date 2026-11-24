@@ -28,6 +28,21 @@ function frameStyle(el: El, autoHeight: boolean): CSSProperties {
   };
 }
 
+/**
+ * Cadre d'un texte. Il ne coupe jamais les lettres : un texte à hauteur fixée
+ * garde cette hauteur comme minimum et grandit s'il ne tient plus ; un texte
+ * qui suit son contenu (badge, pastille) s'élargit à partir de son centre
+ * (ou de son bord, selon l'alignement).
+ */
+function textFrameStyle(el: TextEl): CSSProperties {
+  return {
+    ...frameStyle(el, true),
+    minHeight: el.fixedH ? (el.minH ?? el.h) : undefined,
+    display: "flex",
+    justifyContent: el.hug ? (el.align === "left" ? "flex-start" : el.align === "right" ? "flex-end" : "center") : undefined,
+  };
+}
+
 export function textStyle(el: TextEl): CSSProperties {
   const f = fontDef(el.font);
   return {
@@ -62,12 +77,14 @@ interface EditHooks {
   selectAllOnEdit: (id: string) => boolean;
   /** Point cliqué pour entrer en édition : le curseur s'y place. */
   editPoint: { x: number; y: number } | null;
-  onMeasure: (id: string, h: number) => void;
+  /** Hauteur mesurée du texte, et largeur de son cadre s'il suit son contenu. */
+  onMeasure: (id: string, h: number, w?: number) => void;
   registerReader: (read: (() => string | null) | null) => void;
 }
 
 function TextView({ el, edit }: { el: TextEl; edit?: EditHooks }) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const txRef = useRef<HTMLDivElement>(null);
   const editing = !!edit && edit.editingId === el.id;
   const html = safeHtml(el.html);
@@ -78,13 +95,15 @@ function TextView({ el, edit }: { el: TextEl; edit?: EditHooks }) {
     if (!edit) return;
     const node = frameRef.current;
     if (!node) return;
-    const report = () => edit.onMeasure(el.id, node.offsetHeight);
+    const box = boxRef.current;
+    const report = () => edit.onMeasure(el.id, node.offsetHeight, el.hug && box ? box.offsetWidth : undefined);
     report();
     const ro = new ResizeObserver(report);
     ro.observe(node);
+    if (box) ro.observe(box);
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [el.id, !!edit]);
+  }, [el.id, !!edit, !!el.hug]);
 
   // Entrée et sortie du mode édition.
   useEffect(() => {
@@ -139,8 +158,8 @@ function TextView({ el, edit }: { el: TextEl; edit?: EditHooks }) {
     : {};
 
   return (
-    <div ref={frameRef} className="el el-text" data-el-id={edit ? el.id : undefined} style={frameStyle(el, auto)}>
-      <div className={"tx-box" + (auto ? "" : " tx-fixed")} style={boxStyle}>
+    <div ref={frameRef} className={"el el-text" + (el.hug ? " tx-hug" : "")} data-el-id={edit ? el.id : undefined} style={textFrameStyle(el)}>
+      <div ref={boxRef} className={"tx-box" + (auto ? "" : " tx-fixed")} style={el.hug ? { ...boxStyle, minWidth: el.minW ?? el.w } : boxStyle}>
         <div
           ref={txRef}
           className={"tx" + (el.list ? " tx-list" : "") + (el.fill ? ` tx-fill tx-fill-${el.align}` : "") + (editing ? " tx-editing" : "")}

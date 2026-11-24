@@ -84,6 +84,16 @@ export interface TextEl extends BaseEl {
   dy?: number;
   /** Hauteur fixée à la main (texte centré verticalement) ; sinon la hauteur suit le contenu. */
   fixedH?: boolean;
+  /**
+   * Hauteur minimale d'un texte à hauteur fixée : quand le texte ne tient plus,
+   * le cadre grandit au lieu de laisser déborder les lettres. Posée à la
+   * première croissance (absente = `h`).
+   */
+  minH?: number;
+  /** La largeur suit le texte (badges, pastilles) : pas de retour à la ligne automatique. */
+  hug?: boolean;
+  /** Largeur minimale d'un texte qui suit son contenu (absente = `w`). */
+  minW?: number;
 }
 
 export type ShapeKind = "rect" | "ellipse" | "arrow";

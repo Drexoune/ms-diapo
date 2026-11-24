@@ -51,7 +51,7 @@ describe("historique", () => {
     st().addEls([text]);
     const rev = st().revision;
     expect(st().saveState).toBe("dirty");
-    st().setMeasuredHeight(text.id, 321);
+    st().setMeasured(text.id, 321);
     expect(st().revision).toBe(rev);
     expect(els()[0].h).toBe(321);
     const saving = st().markSaving();

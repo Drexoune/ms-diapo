@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { bbox, union, type Guide } from "../geometry";
+import { applyMeasure, bbox, union, upgradeEls, type Guide } from "../geometry";
 import { cloneEls, cloneSlide, uid } from "../ids";
 import { isBlankHtml } from "../text";
 import { SLIDE_H, SLIDE_W, type Background, type El, type Slide } from "../types";
@@ -82,8 +82,11 @@ interface EditorState {
   addEls: (els: El[]) => void;
   /** Modifie des éléments de la diapo courante. `history: false` pendant un geste. */
   updateEls: (ids: string[], fn: (el: El) => El, opts?: { history?: boolean; coalesce?: string }) => void;
-  /** Hauteur mesurée d'un texte : n'entre ni dans l'historique ni dans l'enregistrement. */
-  setMeasuredHeight: (id: string, h: number) => void;
+  /**
+   * Taille mesurée d'un texte (hauteur ; largeur s'il suit son contenu). Son
+   * groupe suit (voir `applyMeasure`). N'entre pas dans l'historique.
+   */
+  setMeasured: (id: string, h: number, w?: number) => void;
   removeEls: (ids: string[]) => void;
   duplicateEls: (ids: string[]) => void;
   reorder: (ids: string[], how: ZOrder) => void;
@@ -185,7 +188,7 @@ export const useEditor = create<EditorState>((set, get) => {
       lastCoalesce = null;
       set({
         title: doc.title,
-        slides: doc.slides.length ? doc.slides : [blankSlide()],
+        slides: doc.slides.length ? doc.slides.map((sl) => ({ ...sl, els: upgradeEls(sl.els) })) : [blankSlide()],
         current: 0,
         selection: [],
         editingId: null,
@@ -382,8 +385,9 @@ export const useEditor = create<EditorState>((set, get) => {
       }
     },
 
-    addEls: (els) => {
-      if (!els.length) return;
+    addEls: (input) => {
+      if (!input.length) return;
+      const els = upgradeEls(input);
       get().stopEditing();
       updateCurrent((sl) => ({ ...sl, els: [...sl.els, ...els] }), undefined, { selection: els.map((e) => e.id) });
     },
@@ -403,13 +407,12 @@ export const useEditor = create<EditorState>((set, get) => {
       }, opts);
     },
 
-    setMeasuredHeight: (id, h) => {
+    setMeasured: (id, h, w) => {
       const s = get();
       const slide = currentSlide(s);
-      const el = slide.els.find((e) => e.id === id);
-      if (!el || Math.abs(el.h - h) < 0.5) return;
-      const next = { ...slide, els: slide.els.map((e) => (e.id === id ? { ...e, h } : e)) };
-      set({ slides: replaceSlide(s.slides, s.current, next) });
+      const els = applyMeasure(slide.els, id, h, w);
+      if (!els) return;
+      set({ slides: replaceSlide(s.slides, s.current, { ...slide, els }) });
     },
 
     removeEls: (ids) => {

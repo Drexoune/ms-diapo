@@ -103,7 +103,7 @@ export function Canvas({ onDropAsset, onDropFiles }: CanvasDropHandlers) {
         return was;
       },
       editPoint,
-      onMeasure: (id: string, h: number) => useEditor.getState().setMeasuredHeight(id, h),
+      onMeasure: (id: string, h: number, w?: number) => useEditor.getState().setMeasured(id, h, w),
       registerReader: setEditingReader,
     }),
     [editingId, editPoint],
@@ -291,7 +291,7 @@ export function Canvas({ onDropAsset, onDropFiles }: CanvasDropHandlers) {
                   w: r.w,
                   h: s0.fixedH ? r.h : el.h,
                   size,
-                  ...(({ stroke, shadow, glow, dy, box }) => ({ stroke, shadow, glow, dy, box }))(scaleTextEffects(s0, s, round1)),
+                  ...(({ stroke, shadow, glow, dy, box, minH, minW }) => ({ stroke, shadow, glow, dy, box, minH, minW }))(scaleTextEffects(s0, s, round1)),
                 }
               : el,
           { history: false },
@@ -299,11 +299,12 @@ export function Canvas({ onDropAsset, onDropFiles }: CanvasDropHandlers) {
       } else if (hx !== 0) {
         // Côté gauche/droit : la largeur change, le texte se réorganise.
         const r = resizeRect(s0, d.handle, delta, { minW: 60, minH: 10 });
-        st.updateEls([s0.id], (el) => ({ ...el, x: r.x, y: r.y, w: r.w }), { history: false });
+        // Un texte qui suit son contenu prend cette largeur comme minimum.
+        st.updateEls([s0.id], (el) => ({ ...el, x: r.x, y: r.y, w: r.w, ...(el.type === "text" && el.hug ? { minW: r.w } : {}) }), { history: false });
       } else {
         // Haut/bas : hauteur fixée, texte centré dedans.
         const r = resizeRect(s0, d.handle, delta, { minW: 60, minH: 20 });
-        st.updateEls([s0.id], (el) => (el.type === "text" ? { ...el, x: r.x, y: r.y, h: r.h, fixedH: true } : el), { history: false });
+        st.updateEls([s0.id], (el) => (el.type === "text" ? { ...el, x: r.x, y: r.y, h: r.h, minH: r.h, fixedH: true } : el), { history: false });
       }
       return;
     }

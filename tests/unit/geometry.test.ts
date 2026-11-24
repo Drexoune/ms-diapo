@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HANDLES, bbox, corners, resizeRect, rotate, scaleEl, snapAngle, snapLines, snapMove, union, type RotRect } from "@/lib/geometry";
+import { HANDLES, applyMeasure, bbox, corners, resizeRect, rotate, scaleEl, snapAngle, snapLines, snapMove, union, upgradeEls, type RotRect } from "@/lib/geometry";
 import { makeShape, makeText } from "@/lib/factory";
 
 const close = (a: number, b: number) => expect(Math.abs(a - b)).toBeLessThan(1e-6);
@@ -101,5 +101,68 @@ describe("snapAngle", () => {
     expect(snapAngle(52, 15)).toBe(45);
     expect(snapAngle(359, null)).toBe(0);
     expect(snapAngle(270, null)).toBe(-90);
+  });
+});
+
+describe("applyMeasure : les éléments suivent leur texte", () => {
+  const card = () => {
+    const bg = { ...makeShape("rect", { x: 0, y: 0, w: 690, h: 290 }), id: "bg", group: "g" };
+    const title = { ...makeText({ text: "Titre", x: 30, y: 24, w: 630, size: 56 }), id: "title", group: "g" };
+    const body = { ...makeText({ text: "Texte", x: 30, y: 104, w: 630, size: 40 }), id: "body", group: "g" };
+    const pill = { ...makeText({ text: "PDF", x: 530, y: 214, w: 130, size: 28 }), id: "pill", group: "g" };
+    const other = { ...makeText({ text: "Ailleurs", x: 0, y: 400, w: 600, size: 40 }), id: "other" };
+    return [bg, title, body, pill, other];
+  };
+
+  it("un texte qui grandit allonge le fond de sa carte et fait descendre ce qui est dessous", () => {
+    const els = card();
+    const body = els[2];
+    const out = applyMeasure(els, "body", body.h + 80)!;
+    const by = Object.fromEntries(out.map((e) => [e.id, e]));
+    expect(by.body.h).toBe(body.h + 80);
+    expect(by.bg.h).toBe(290 + 80);
+    expect(by.pill.y).toBe(214 + 80);
+    expect(by.title.y).toBe(24);
+    // Hors du groupe : rien ne bouge.
+    expect(by.other.y).toBe(400);
+  });
+
+  it("en raccourcissant le texte, on retrouve la mise en page d'origine", () => {
+    const els = card();
+    const h0 = els[2].h;
+    const grown = applyMeasure(els, "body", h0 + 80)!;
+    const back = applyMeasure(grown, "body", h0)!;
+    expect(back).toEqual(els);
+  });
+
+  it("un écart d'arrondi ne déplace rien", () => {
+    const els = card();
+    const out = applyMeasure(els, "body", els[2].h + 1)!;
+    expect(out.find((e) => e.id === "pill")!.y).toBe(214);
+  });
+
+  it("un texte à hauteur fixée grandit sans perdre sa hauteur minimale", () => {
+    const el = { ...makeText({ text: "Badge", w: 263, size: 62, h: 80, fixedH: true }), id: "b" };
+    const out = applyMeasure([el], "b", 150)![0];
+    expect(out).toMatchObject({ h: 150, minH: 80 });
+    const back = applyMeasure([out], "b", 80)![0];
+    expect(back).toMatchObject({ h: 80, minH: 80 });
+  });
+
+  it("un texte qui suit son contenu s'élargit depuis son centre, et ne descend pas sous sa largeur d'origine", () => {
+    const el = { ...makeText({ text: "Badge", x: 100, w: 263, size: 62, hug: true }), id: "b" };
+    const wide = applyMeasure([el], "b", el.h, 463)![0];
+    expect(wide).toMatchObject({ w: 463, x: 0, minW: 263 });
+    const right = applyMeasure([{ ...el, align: "right" as const }], "b", el.h, 463)![0];
+    expect(right.x).toBe(-100);
+  });
+
+  it("les badges déjà posés suivent désormais leur texte", () => {
+    const old = { ...makeText({ text: "Badge", font: "etiquette", fill: "linear-gradient(red, blue)", size: 62, box: { fill: "#000", radius: 7, border: 0, borderColor: "#000", shadow: 0, padX: 0, padY: 0 } }), id: "b" };
+    const [up] = upgradeEls([old]);
+    expect(up).toMatchObject({ hug: true, box: { padX: 18 } });
+    const plain = { ...makeText({ text: "Titre" }), id: "t" };
+    const list = [plain];
+    expect(upgradeEls(list)).toBe(list);
   });
 });

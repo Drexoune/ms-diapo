@@ -324,10 +324,23 @@ button:disabled {
   box-sizing: border-box;
   width: 100%;
 }
+.tx-box {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Hauteur fixée : le texte est centré verticalement ; le cadre (min-height) grandit s'il ne tient plus. */
 .tx-fixed {
-  height: 100%;
   display: flex;
   align-items: center;
+}
+/* Largeur qui suit le texte : pas de retour à la ligne automatique, le cadre s'élargit. */
+.tx-hug > .tx-box {
+  flex: none;
+  width: max-content;
+}
+.tx-hug .tx {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 .tx {
   width: 100%;

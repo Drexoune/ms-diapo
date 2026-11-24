@@ -3,7 +3,7 @@
 L'éditeur de diapos de [MS Creators](https://ms-creators.com). On choisit un modèle, on écrit son texte, on présente — le tout aux couleurs de MS, sans rien connaître au design.
 
 - **Éditeur** : textes à contour épais, étiquettes, cartes, images, formes ; glisser-déposer, guides d'alignement, annuler/rétablir, enregistrement automatique.
-- **Bibliothèque d'éléments** : titres, étiquettes (dont les badges doré, cuivré et vert, au texte en dégradé), listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo. Tous les textes s'écrivent au double-clic.
+- **Bibliothèque d'éléments** : titres, étiquettes (dont les badges doré, cuivré et vert, au texte en dégradé), listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo. Tous les textes s'écrivent au double-clic, et les fonds suivent : un badge ou une pastille s'élargit avec son texte, une étiquette ou une carte s'allonge, et ce qui est dessous dans le même bloc descend d'autant. Aucune lettre ne déborde.
 - **Modèles** : des diapos et des présentations complètes prêtes à remplir.
 - **Exemples** : d'anciennes présentations MS, déposées par le staff (PDF, images, ou présentation faite dans l'app), que tout le monde peut feuilleter page par page et télécharger en PDF — depuis l'accueil comme depuis l'éditeur.
 - **Visite guidée** : à la première connexion, un projecteur présente les outils un à un, de l'accueil à l'éditeur, jusqu'au bouton Aide. Elle se relance depuis l'aide ou le bouton « Visite guidée » de l'accueil.
@@ -116,7 +116,7 @@ npm run test:e2e
 
 Pilote l'application dans Chromium, en mode démo : création, édition, glisser-déposer, modèles, export, présentation, panel admin. Nécessite Playwright et une application qui tourne sur `http://localhost:3000` (ou `E2E_URL`).
 
-Ce script enchaîne `tests/e2e/run.cjs` (tout le parcours, exemples compris) et `tests/e2e/tour.cjs` (visite guidée). `tests/e2e/guest.cjs` vérifie le mode invité ; son en-tête explique comment le lancer (il lui faut une application construite avec les variables Supabase).
+Ce script enchaîne `tests/e2e/run.cjs` (tout le parcours, exemples compris), `tests/e2e/tour.cjs` (visite guidée) et `tests/e2e/responsive.cjs` (chaque élément de la bibliothèque reçoit un texte long : rien ne doit sortir de son fond ni de sa carte, ni recouvrir un autre texte). `tests/e2e/guest.cjs` vérifie le mode invité ; son en-tête explique comment le lancer (il lui faut une application construite avec les variables Supabase).
 
 ## Organisation du code
 
@@ -150,6 +150,8 @@ public/
 ```
 
 Toutes les coordonnées d'une diapo sont exprimées dans un repère fixe de 1920 × 1080 ; l'affichage n'est qu'une mise à l'échelle. C'est ce qui garantit que l'export est identique à ce qu'on voit dans l'éditeur.
+
+Les textes se mesurent dans l'éditeur et leur taille réelle est enregistrée (`applyMeasure` dans `geometry.ts`) : un texte à hauteur fixée garde cette hauteur comme minimum (`minH`), un texte qui suit son contenu (`hug`, badges et pastilles) garde sa largeur d'origine comme minimum (`minW`) et s'élargit depuis son centre ou son bord selon l'alignement. Dans un groupe, la forme qui contient le texte s'allonge et les éléments placés dessous descendent ; c'est pourquoi les blocs de textes empilés de la bibliothèque sont groupés.
 
 ## Ajouter au pack de départ
 

@@ -1,5 +1,6 @@
 import { GOLD_FILL, GOLD_TEXT, PALETTE, makeBox, makeImage, makeShape, makeText, type TextInit } from "./factory";
 import type { Asset, AssetCategory, Background, El, ImageEl, ShapeEl, Slide, Template, TemplateCategory, TextEl } from "./types";
+import { BADGE_PAD_X } from "./geometry";
 
 /**
  * Pack de départ : éléments de bibliothèque et modèles fournis avec
@@ -39,10 +40,13 @@ const pill = (text: string, x: number, y: number, w: number, fill = "#000000", c
   t(text, x, y, w, 28, {
     outlined: false,
     color,
+    // La pastille épouse son texte, sans largeur minimale.
+    hug: true,
+    minW: 0,
     box: makeBox({ fill, radius: 999, border: 0, shadow: 0, padX: 18, padY: 9 }),
   });
 
-/** Largeur d'une pastille selon son texte (la largeur d'un texte est fixe : elle ne s'ajuste pas toute seule). */
+/** Largeur de départ d'une pastille selon son texte (elle s'élargit ensuite si le texte s'allonge). */
 const pillWidth = (text: string) => 62 + text.length * 23;
 
 const gold = (text: string, x: number, y: number, w: number, size = 52): TextEl =>
@@ -89,7 +93,8 @@ const card = (x: number, y: number, w: number, h: number, title: string, body: s
     rect(x, y, w, h, fill),
     t(title, x + 30, y + 24, w - 60, 56, { align: "left" }),
     t(body, x + 30, y + 104, w - 60, 40, { align: "left", lh: 1.06 }),
-    ...(tag ? [pill(tag, x + w - 30 - pillWidth(tag), y + h - 30 - 46, pillWidth(tag))] : []),
+    // Pastille calée à droite : un texte plus long l'élargit vers la gauche, dans la carte.
+    ...(tag ? [{ ...pill(tag, x + w - 30 - pillWidth(tag), y + h - 30 - 46, pillWidth(tag)), align: "right" as const }] : []),
   ]);
 
 /* ───────────── Éléments de bibliothèque ───────────── */
@@ -118,20 +123,21 @@ function addImage(category: AssetCategory, id: string, name: string, tags: strin
 
 // Titres
 addElements("titres", "titre-gros", "Gros titre", ["titre", "chapitre", "partie"], [t("Gros titre", 0, 0, 1500, 148)]);
-addElements("titres", "titre-nom", "Titre + nom", ["ouverture", "nom", "doré"], [
+// Textes empilés : groupés, pour qu'un texte qui s'allonge pousse celui du dessous.
+addElements("titres", "titre-nom", "Titre + nom", ["ouverture", "nom", "doré"], grouped([
   gold("Ton nom", 400, 0, 700, 56),
   t("Titre de la\nprésentation", 0, 108, 1500, 132, { lh: 1 }),
-]);
+]));
 addElements("titres", "titre-diapo", "Titre de diapo", ["titre"], [t("Titre de la diapo", 0, 0, 1500, 100)]);
 addElements("titres", "question", "Question", ["question", "qui"], [t("Qui suis-je ?", 0, 0, 1100, 132)]);
 addElements("titres", "sous-titre", "Sous-titre", ["sous-titre", "texte"], [t("Un sous-titre pour préciser", 0, 0, 1300, 56)]);
 addElements("titres", "mot-jaune", "Mot en jaune", ["surligner", "jaune", "phrase"], [
   t("", 0, 0, 1500, 100, { html: `<div>Tu es un <span style="color:${PALETTE.yellow}">chef d'entreprise</span></div>` }),
 ]);
-addElements("titres", "chiffre", "Chiffre clé", ["chiffre", "nombre", "stat"], [
+addElements("titres", "chiffre", "Chiffre clé", ["chiffre", "nombre", "stat"], grouped([
   t("100 000", 0, 0, 1000, 210, { color: PALETTE.yellow }),
   t("abonnés cumulés", 0, 232, 1000, 60),
-]);
+]));
 addElements("titres", "texte", "Texte simple", ["paragraphe", "texte"], [
   t("Un texte plus long, pour expliquer une idée en une ou deux phrases.", 0, 0, 1100, 46, { align: "left", lh: 1.1 }),
 ]);
@@ -157,7 +163,9 @@ const badge = (fill: string, text: [string, string, string]): TextEl =>
     fill: `linear-gradient(90deg, ${text[0]} 0%, ${text[1]} 40%, ${text[1]} 60%, ${text[2]} 100%)`,
     glow: { y: 3, blur: 4, opacity: 0.3 },
     dy: 2,
-    box: makeBox({ fill, radius: 7, border: 0, shadow: 0, padX: 0, padY: 0, soft: { y: 4, blur: 4, opacity: 0.25 } }),
+    // La largeur d'origine reste le minimum ; un texte plus long élargit le badge.
+    hug: true,
+    box: makeBox({ fill, radius: 7, border: 0, shadow: 0, padX: BADGE_PAD_X, padY: 0, soft: { y: 4, blur: 4, opacity: 0.25 } }),
   });
 addElements("etiquettes", "badge-dore", "Badge doré", ["badge", "doré", "or", "étiquette"], [badge("rgba(128, 106, 0, 0.69)", ["#d1ab54", "#ffeb87", "#d3ad55"])]);
 addElements("etiquettes", "badge-cuivre", "Badge cuivré", ["badge", "cuivre", "marron", "étiquette"], [badge("#725432", ["#9e6a30", "#d89346", "#a06b30"])]);
@@ -191,15 +199,15 @@ addElements(
     t("Premier point\nDeuxième point\nTroisième point", 34, 120, 690, 40, { align: "left", list: true, lh: 1.15 }),
   ]),
 );
-addElements("listes", "etapes", "Étapes numérotées", ["étapes", "numéros", "plan"], [
+addElements("listes", "etapes", "Étapes numérotées", ["étapes", "numéros", "plan"], grouped([
   label("1 – Première étape", 0, 0, 900, 46, "#ffffff"),
   label("2 – Deuxième étape", 0, 122, 900, 46, "#ffffff"),
   label("3 – Troisième étape", 0, 244, 900, 46, "#ffffff"),
-]);
-addElements("listes", "sommaire", "Sommaire", ["sommaire", "plan"], [
+]));
+addElements("listes", "sommaire", "Sommaire", ["sommaire", "plan"], grouped([
   t("On va voir :", 0, 0, 1200, 56, { align: "left" }),
   t("Le premier sujet\nLe deuxième sujet\nLe troisième sujet", 0, 84, 1200, 52, { align: "left", list: true, lh: 1.12 }),
-]);
+]));
 
 // Cartes
 addElements("cartes", "carte-creme", "Carte titre + texte", ["carte", "bloc"], card(0, 0, 690, 290, "Titre", "Une explication courte\nen deux lignes", PALETTE.cream, "PDF"));
@@ -215,12 +223,13 @@ addElements(
     t("On le comprend en une phrase", 30, 126, 675, 34),
   ]),
 );
-addElements("cartes", "grille-4", "Grille de 4 cartes", ["grille", "cartes", "2x2"], [
+// Un seul groupe : une carte qui s'allonge pousse celle du dessous.
+addElements("cartes", "grille-4", "Grille de 4 cartes", ["grille", "cartes", "2x2"], grouped([
   ...card(0, 0, 690, 290, "Premier", "Une explication courte"),
   ...card(730, 0, 690, 290, "Deuxième", "Une explication courte"),
   ...card(0, 330, 690, 290, "Troisième", "Une explication courte"),
   ...card(730, 330, 690, 290, "Quatrième", "Une explication courte"),
-]);
+]));
 addElements("cartes", "bloc-sombre", "Bloc à révéler", ["révéler", "cache", "sombre"], [rect(0, 0, 576, 330, PALETTE.dark)]);
 addElements(
   "cartes",

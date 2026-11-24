@@ -171,6 +171,8 @@ export function scaleTextEffects<T extends TextEl>(el: T, s: number, round: (n: 
     shadow: round(el.shadow * s),
     glow: scaleSoft(el.glow, s),
     dy: el.dy ? el.dy * s : el.dy,
+    minH: el.minH != null ? el.minH * s : el.minH,
+    minW: el.minW != null ? el.minW * s : el.minW,
     box: el.box
       ? {
           ...el.box,
@@ -267,3 +269,66 @@ export function snapAngle(deg: number, step: number | null): number {
 }
 
 export const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/* ───────────── Mesure des textes ───────────── */
+
+/** En dessous, un écart de hauteur est un arrondi : on ne déplace rien autour. */
+const REFLOW_MIN = 1.5;
+
+/**
+ * Applique la taille mesurée d'un texte (hauteur, et largeur s'il suit son
+ * contenu). Quand la hauteur change, le reste de son groupe suit :
+ *  - une forme qui contient le texte (fond de carte, marche de podium)
+ *    s'allonge d'autant ;
+ *  - les éléments placés sous le texte, dans sa colonne, descendent d'autant.
+ * Les écarts s'appliquent dans les deux sens : en raccourcissant le texte,
+ * on retrouve la mise en page d'origine.
+ * Renvoie `null` si rien ne change.
+ */
+export function applyMeasure(els: El[], id: string, h: number, w?: number): El[] | null {
+  const el = els.find((e) => e.id === id);
+  if (!el || el.type !== "text") return null;
+  let next: TextEl = el;
+  if (Math.abs(el.h - h) >= 0.5) {
+    next = { ...next, h, ...(el.fixedH && el.minH == null ? { minH: el.h } : {}) };
+  }
+  if (w != null && el.hug && Math.abs(el.w - w) >= 0.5) {
+    const dw = w - el.w;
+    const dx = el.align === "center" ? dw / 2 : el.align === "right" ? dw : 0;
+    next = { ...next, w, x: el.x - dx, ...(el.minW == null ? { minW: el.w } : {}) };
+  }
+  if (next === el) return null;
+
+  const dh = next.h - el.h;
+  const reflow = !!el.group && Math.abs(dh) >= REFLOW_MIN;
+  const bottom = el.y + el.h;
+  const tol = 1;
+  return els.map((e) => {
+    if (e.id === id) return next;
+    if (!reflow || e.group !== el.group) return e;
+    const overlapsX = e.x < el.x + el.w - tol && e.x + e.w > el.x + tol;
+    const contains =
+      e.type === "shape" && e.shape !== "arrow" && e.x <= el.x + tol && e.x + e.w >= el.x + el.w - tol && e.y <= el.y + tol && e.y + e.h >= bottom - tol;
+    if (contains) return { ...e, h: Math.max(12, e.h + dh) };
+    if (overlapsX && e.y >= bottom - tol) return { ...e, y: e.y + dh };
+    return e;
+  });
+}
+
+/** Marge intérieure d'un badge de chaque côté du texte, au-delà de sa largeur d'origine. */
+export const BADGE_PAD_X = 18;
+
+/**
+ * Badges posés avant qu'ils suivent leur texte (police MS Étiquette + dégradé) :
+ * on leur donne la largeur qui suit le contenu, avec une marge intérieure.
+ * Leur aspect ne change pas tant que le texte tient dans le cadre d'origine.
+ */
+export function upgradeEls(els: El[]): El[] {
+  let changed = false;
+  const out = els.map((e) => {
+    if (e.type !== "text" || e.hug != null || e.font !== "etiquette" || !e.fill || !e.box) return e;
+    changed = true;
+    return { ...e, hug: true, box: { ...e.box, padX: Math.max(e.box.padX, BADGE_PAD_X * (e.size / 62)) } };
+  });
+  return changed ? out : els;
+}
