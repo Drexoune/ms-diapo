@@ -154,9 +154,20 @@ function check(cond, label, detail = "") {
     await next();
     await at(id);
   }
-  const admin = await page.locator('[data-tour="admin"]').boundingBox();
-  const hole3 = await holeBox();
-  check(Math.abs(hole3.y + hole3.height / 2 - (admin.y + admin.height / 2)) < 2, "… qui montre le panel admin");
+  // Le projecteur glisse jusqu'au bouton : on lui laisse le temps d'arriver.
+  const onAdmin = await page
+    .waitForFunction(
+      () => {
+        const a = document.querySelector('[data-tour="admin"]')?.getBoundingClientRect();
+        const h = document.querySelector('[data-testid="tour-hole"]')?.getBoundingClientRect();
+        return !!a && !!h && Math.abs(h.y + h.height / 2 - (a.y + a.height / 2)) < 2;
+      },
+      null,
+      { timeout: 3000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check(onAdmin, "… qui montre le panel admin");
   await page.click('[data-testid="tour-skip"]');
   await gone();
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, RotateCcw, ShieldAlert, Trash2, Type } from "lucide-react";
+import { ArrowLeft, BookOpen, Copy, FilePlus2, ImagePlus, Layers, Loader2, Pencil, Presentation, RotateCcw, ShieldAlert, Trash2, Type } from "lucide-react";
 import { ExamplesAdmin } from "./ExamplesAdmin";
 import { TextsModal, textsOf } from "./TextsModal";
 import { CategorySelect, UploadAssetsModal, parseTags } from "./forms";
@@ -14,14 +14,18 @@ import { applyBuiltin, useApp } from "@/lib/app";
 import { data } from "@/lib/backend";
 import { cloneSlides } from "@/lib/ids";
 import { STARTER_ASSETS, STARTER_TEMPLATES, firstSlide, resolveAvatarInSlides, tokenizeAvatarInSlides } from "@/lib/starter";
-import { ASSET_CATEGORIES, TEMPLATE_CATEGORIES, type Asset, type AssetCategory, type DeckMeta, type Template, type TemplateCategory } from "@/lib/types";
+import { ASSET_CATEGORIES, TEMPLATE_CATEGORIES, type Asset, type AssetCategory, type DeckMeta, type Template } from "@/lib/types";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Une erreur est survenue");
 
 /** Panel admin (staff) : gérer les éléments de bibliothèque et les modèles. */
 export function AdminScreen() {
   const { profile, loading } = useApp();
-  const [tab, setTab] = useState<"assets" | "templates" | "examples">("assets");
+  // Onglet demandé par l'adresse (retour de l'éditeur de modèles : /admin?onglet=modeles).
+  const [tab, setTab] = useState<"assets" | "templates" | "examples">(() => {
+    const onglet = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("onglet");
+    return onglet === "modeles" ? "templates" : onglet === "exemples" ? "examples" : "assets";
+  });
 
   if (loading) {
     return (
@@ -354,27 +358,65 @@ function TemplatesAdmin() {
   const [importing, setImporting] = useState(false);
   const [toDelete, setToDelete] = useState<Template | null>(null);
   const [renaming, setRenaming] = useState<Template | null>(null);
+  const [toCopy, setToCopy] = useState<Template | null>(null);
+  const [kind, setKind] = useState<"all" | Template["kind"]>("all");
+  const [query, setQuery] = useState("");
   const avatar = profile?.avatarUrl ?? null;
 
-  const create = async (kind: "slide" | "deck") => {
-    setBusy(kind);
+  const run = async (key: string, fn: () => Promise<void>) => {
+    setBusy(key);
     try {
-      const t = await data.createTemplate({
-        kind,
-        name: kind === "slide" ? "Nouveau modèle de diapo" : "Nouveau modèle de présentation",
-        category: kind === "slide" ? "contenu" : "ouverture",
-        slides: [firstSlide()],
-      });
-      await reloadLibrary();
-      router.push(`/modele/${t.id}`);
+      await fn();
     } catch (e) {
       toast(errorText(e), "error");
+    } finally {
+      // Toujours relâché : la page garde son état quand on y revient depuis l'éditeur.
       setBusy(null);
     }
   };
 
+  const create = (k: "slide" | "deck") =>
+    run(k, async () => {
+      const t = await data.createTemplate({
+        kind: k,
+        name: k === "slide" ? "Nouveau modèle de diapo" : "Nouveau modèle de présentation",
+        category: k === "slide" ? "contenu" : "ouverture",
+        slides: [firstSlide()],
+      });
+      await reloadLibrary();
+      router.push(`/modele/${t.id}`);
+    });
+
+  /** Copie modifiable, à la même place. Les diapos gardent la bulle du présentateur sous forme de repère. */
+  const copyOf = (t: Template, name: string) =>
+    data.createTemplate({ kind: t.kind, name, category: t.category, slides: tokenizeAvatarInSlides(cloneSlides(t.slides), avatar), sort: t.sort });
+
+  const edit = (t: Template) => {
+    if (t.builtin) setToCopy(t);
+    else router.push(`/modele/${t.id}`);
+  };
+
+  /** Modèle du pack : une copie le remplace pour tout le monde, l'original reste récupérable. */
+  const replaceBuiltin = (t: Template) =>
+    run(t.id, async () => {
+      const copy = await copyOf(t, t.name);
+      await data.setHidden(t.id, true);
+      await reloadLibrary();
+      router.push(`/modele/${copy.id}`);
+    });
+
+  const duplicate = (t: Template) =>
+    run(`dup:${t.id}`, async () => {
+      await copyOf(t, `${t.name} (copie)`.slice(0, 80));
+      await reloadLibrary();
+      toast(`« ${t.name} » dupliqué`, "ok");
+    });
+
   const named = (t: Template) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t);
-  const list = [...customTemplates, ...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map(named)];
+  // Même ordre que la galerie des modèles : une copie prend la place de l'original.
+  const all = [...customTemplates, ...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map(named)].sort((a, b) => a.sort - b.sort);
+  const q = query.trim().toLowerCase();
+  const list = all.filter((t) => (kind === "all" || t.kind === kind) && (!q || t.name.toLowerCase().includes(q)));
   const deleted = STARTER_TEMPLATES.filter((t) => hidden.has(t.id)).map(named);
 
   return (
@@ -384,7 +426,7 @@ function TemplatesAdmin() {
           {busy === "slide" ? <Loader2 size={17} className="spin" /> : <FilePlus2 size={17} strokeWidth={2.8} />}
           Nouveau modèle de diapo
         </button>
-        <button className="nb-btn" onClick={() => create("deck")} disabled={!!busy}>
+        <button className="nb-btn" onClick={() => create("deck")} disabled={!!busy} data-testid="admin-new-deck-template">
           {busy === "deck" ? <Loader2 size={17} className="spin" /> : <Presentation size={17} strokeWidth={2.8} />}
           Nouveau modèle de présentation
         </button>
@@ -393,71 +435,80 @@ function TemplatesAdmin() {
         </button>
       </div>
       <p className="rounded-[14px] border-[2.5px] border-dashed border-ink bg-white px-4 py-2.5 text-[14px] font-semibold">
-        Un modèle se construit dans le même éditeur qu&apos;une présentation. Depuis une présentation, tu peux aussi ouvrir « Modèles » puis « Cette diapo → modèle ».
+        « Modifier » ouvre le modèle dans l&apos;éditeur de diapos : on y ajoute, retire et réordonne les diapos, on change textes, images et fonds, et tout
+        s&apos;enregistre pour tout le monde. Un modèle du pack de départ est d&apos;abord remplacé par une copie modifiable ; l&apos;original reste récupérable.
       </p>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            ["all", "Tous"],
+            ["slide", "Diapos"],
+            ["deck", "Présentations"],
+          ] as const
+        ).map(([k, label]) => (
+          <button key={k} className={"chip " + (kind === k ? "on" : "")} onClick={() => setKind(k)} data-testid={`templates-filter-${k}`}>
+            {label}
+          </button>
+        ))}
+        <div className="ml-auto w-[280px] max-w-full">
+          <input className="nb-input h-[38px]" placeholder="Chercher un modèle" aria-label="Chercher un modèle" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4" data-testid="admin-templates">
-        {list.map((t) => {
-          return (
-            <div key={t.id} className="flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111]" data-template-id={t.id}>
-              <div className="overflow-hidden rounded-[9px] border-2 border-ink">
-                <FluidThumb slide={resolveAvatarInSlides(t.slides.slice(0, 1), avatar)[0]} />
-              </div>
-              <div className="mt-2 truncate text-[15px] font-extrabold">{t.name}</div>
-              <div className="mb-2 text-[12px] font-semibold text-muted">
-                {t.kind === "deck" ? `Présentation · ${t.slides.length} diapos` : `Diapo · ${TEMPLATE_CATEGORIES.find((c) => c.id === t.category)?.label ?? ""}`} ·{" "}
-                {t.builtin ? "pack de départ" : "ajouté par le staff"}
-              </div>
-              <div className="mt-auto flex flex-wrap items-center gap-2">
-                <button className="nb-btn sm" onClick={() => setRenaming(t)} data-testid="template-rename">
-                  <Pencil size={14} strokeWidth={2.8} />
-                  Renommer
-                </button>
-                {t.builtin ? (
-                  <button className="nb-btn sm" onClick={() => setToDelete(t)} aria-label="Supprimer" title="Supprimer" data-testid="template-delete">
-                    <Trash2 size={14} strokeWidth={2.8} />
-                  </button>
-                ) : (
-                  <>
-                    <Link href={`/modele/${t.id}`} className="nb-btn sm sun">
-                      <Layers size={14} strokeWidth={2.8} />
-                      Ouvrir
-                    </Link>
-                    {t.kind === "slide" && (
-                      <select
-                        className="h-[30px] rounded-[9px] border-2 border-ink bg-white px-1.5 text-[12px] font-extrabold"
-                        value={t.category}
-                        aria-label="Catégorie"
-                        onChange={async (e) => {
-                          try {
-                            await data.updateTemplate(t.id, { category: e.target.value as TemplateCategory });
-                            await reloadLibrary();
-                          } catch (err) {
-                            toast(errorText(err), "error");
-                          }
-                        }}
-                      >
-                        {TEMPLATE_CATEGORIES.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <button className="nb-btn sm" onClick={() => setToDelete(t)} aria-label="Supprimer" title="Supprimer">
-                      <Trash2 size={14} strokeWidth={2.8} />
-                    </button>
-                  </>
-                )}
-              </div>
+        {list.map((t) => (
+          <div key={t.id} className="flex flex-col rounded-[14px] border-[2.5px] border-ink bg-white p-2.5 shadow-[3px_3px_0_#111]" data-template-id={t.id}>
+            <button className="relative overflow-hidden rounded-[9px] border-2 border-ink" onClick={() => edit(t)} title="Modifier dans l'éditeur" aria-label={`Modifier ${t.name}`}>
+              <FluidThumb slide={resolveAvatarInSlides(t.slides.slice(0, 1), avatar)[0]} />
+              {busy === t.id && (
+                <span className="absolute inset-0 flex items-center justify-center bg-white/60">
+                  <Loader2 className="spin" size={26} strokeWidth={3} />
+                </span>
+              )}
+            </button>
+            <div className="mt-2 truncate text-[15px] font-extrabold">{t.name}</div>
+            <div className="mb-2 text-[12px] font-semibold text-muted">
+              {t.kind === "deck" ? `Présentation · ${t.slides.length} diapos` : `Diapo · ${TEMPLATE_CATEGORIES.find((c) => c.id === t.category)?.label ?? ""}`} ·{" "}
+              {t.builtin ? "pack de départ" : "modifié par le staff"}
             </div>
-          );
-        })}
+            <div className="mt-auto flex flex-wrap items-center gap-2">
+              <button className="nb-btn sm sun" onClick={() => edit(t)} disabled={!!busy} data-testid="template-edit">
+                <Layers size={14} strokeWidth={2.8} />
+                Modifier
+              </button>
+              <button className="nb-btn sm" onClick={() => setRenaming(t)} aria-label="Renommer" title="Renommer" data-testid="template-rename">
+                <Pencil size={14} strokeWidth={2.8} />
+              </button>
+              <button className="nb-btn sm" onClick={() => duplicate(t)} disabled={!!busy} aria-label="Dupliquer" title="Dupliquer" data-testid="template-duplicate">
+                {busy === `dup:${t.id}` ? <Loader2 size={14} className="spin" /> : <Copy size={14} strokeWidth={2.8} />}
+              </button>
+              <button className="nb-btn sm" onClick={() => setToDelete(t)} aria-label="Supprimer" title="Supprimer" data-testid="template-delete">
+                <Trash2 size={14} strokeWidth={2.8} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 && <p className="col-span-full py-6 text-center text-[15px] font-bold text-muted">Aucun modèle ne correspond.</p>}
       </div>
 
       <DeletedBuiltins items={deleted} kind="modèle" />
 
       {importing && <ImportDeckModal onClose={() => setImporting(false)} />}
+      {toCopy && (
+        <Confirm
+          title="Modifier un modèle du pack de départ"
+          message={
+            <>
+              « {toCopy.name} » est fourni avec l&apos;application. Pour le modifier, une copie prend sa place, au même rang, pour tout le monde. L&apos;original
+              reste récupérable en bas de cette page (« supprimés — restaurer »).
+            </>
+          }
+          confirmLabel="Créer la copie et modifier"
+          onConfirm={() => replaceBuiltin(toCopy)}
+          onClose={() => setToCopy(null)}
+        />
+      )}
       {renaming && (
         <RenameModal
           title="Renommer le modèle"
@@ -474,7 +525,12 @@ function TemplatesAdmin() {
       {toDelete && (
         <Confirm
           title="Supprimer ce modèle ?"
-          message={<>« {toDelete.name} » ne sera plus proposé. Les présentations déjà créées avec ce modèle ne changent pas.</>}
+          message={
+            <>
+              « {toDelete.name} » ne sera plus proposé. Les présentations déjà créées avec ce modèle ne changent pas.
+              {toDelete.builtin ? " Il restera récupérable en bas de cette page." : " C'est définitif."}
+            </>
+          }
           confirmLabel="Supprimer"
           danger
           onConfirm={async () => {
@@ -522,6 +578,8 @@ function ImportDeckModal({ onClose }: { onClose: () => void }) {
       await reloadLibrary();
       toast("Modèle créé : tu peux l'ajuster avant de le laisser tel quel", "ok");
       router.push(`/modele/${t.id}`);
+      // Fermée tout de suite : la page garde son état quand on y revient depuis l'éditeur.
+      onClose();
     } catch (e) {
       toast(errorText(e), "error");
       setBusy(null);

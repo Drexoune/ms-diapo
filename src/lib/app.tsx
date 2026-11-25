@@ -140,7 +140,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [customAssets, hidden, avatar, builtinNames, builtinContents]);
 
   const templates = useMemo(() => {
-    const all = [...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map((t) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t)), ...customTemplates];
+    // Rangés par rang : la copie modifiée d'un modèle du pack prend la place de l'original.
+    const all = [...STARTER_TEMPLATES.filter((t) => !hidden.has(t.id)).map((t) => (builtinNames[t.id] ? { ...t, name: builtinNames[t.id] } : t)), ...customTemplates].sort(
+      (a, b) => a.sort - b.sort,
+    );
     return all.map((t) => ({ ...t, slides: resolveAvatarInSlides(t.slides, avatar) }));
   }, [customTemplates, hidden, avatar, builtinNames]);
 

@@ -602,6 +602,80 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   templates = await stored("msd:templates");
   check(templates[1].name === "Diapo maison" && templates[1].kind === "slide", "« Cette diapo → modèle » crée un modèle");
 
+  /* ───────────── 13 bis. Éditeur de modèles ───────────── */
+  section("Éditeur de modèles");
+  await page.goto(`${BASE}/admin?onglet=modeles`, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="admin-templates"]');
+  check(true, "/admin?onglet=modeles ouvre directement l'onglet Modèles");
+  const cardIds = () => page.locator('[data-testid="admin-templates"] [data-template-id]').evaluateAll((n) => n.map((e) => e.getAttribute("data-template-id")));
+  const rankBefore = (await cardIds()).indexOf("b:modele-chapitre");
+  await page.locator('[data-template-id="b:modele-chapitre"] [data-testid="template-edit"]').click();
+  await page.getByRole("dialog").getByRole("button", { name: "Créer la copie et modifier" }).click();
+  await page.waitForSelector('[data-testid="template-bar"]', { timeout: 30000 });
+  await page.waitForSelector('[data-testid="stage"] .el-text');
+  check(/\/modele\/[0-9a-f-]{36}$/.test(page.url()), "« Modifier » sur un modèle du pack ouvre l'éditeur sur sa copie");
+  templates = await stored("msd:templates");
+  const copy = templates[2];
+  check(
+    templates.length === 3 && copy.name === "Chapitre" && (await stored("msd:hidden")).includes("b:modele-chapitre"),
+    "la copie remplace l'original, qui est mis de côté",
+  );
+  check((await page.locator('[data-testid="editor-back"]').getAttribute("href")) === "/admin?onglet=modeles", "le logo ramène aux modèles du panel admin");
+
+  // On le modifie comme une présentation : texte, diapo ajoutée, type, catégorie.
+  const tmplTitle = texts().first();
+  const tc = center(await tmplTitle.boundingBox());
+  await page.mouse.dblclick(tc.x, tc.y);
+  await page.waitForSelector('.tx[contenteditable="true"]');
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("Partie modifiée");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.click('[data-testid="add-slide"]');
+  await page.selectOption('[data-testid="template-kind"]', "deck");
+  await page.waitForFunction((id) => JSON.parse(localStorage.getItem("msd:templates")).find((t) => t.id === id).kind === "deck", copy.id);
+  check((await page.locator('[data-testid="template-category"]').count()) === 0, "un modèle de présentation n'a pas de catégorie de diapo");
+  await page.selectOption('[data-testid="template-kind"]', "slide");
+  check((await page.locator('[data-testid="template-multi-hint"]').count()) === 1, "un modèle de diapo à plusieurs diapos est signalé");
+  await page.selectOption('[data-testid="template-category"]', "fin");
+  await saved();
+  await page.click('[data-testid="template-done"]');
+  await page.waitForURL(/\/admin\?onglet=modeles$/);
+  await page.waitForSelector('[data-testid="admin-templates"]');
+  const edited = (await stored("msd:templates")).find((t) => t.id === copy.id);
+  check(
+    edited.kind === "slide" && edited.category === "fin" && edited.slides.length === 2 && edited.slides[0].els.some((e) => e.html === "<div>Partie modifiée</div>"),
+    "texte, diapo ajoutée, type et catégorie sont enregistrés",
+  );
+  check((await cardIds()).indexOf(copy.id) === rankBefore, "« Terminer » ramène au panel, où la copie a pris la place de l'original", `${(await cardIds()).indexOf(copy.id)} / ${rankBefore}`);
+
+  // Dupliquer, puis supprimer la copie.
+  await page.locator(`[data-template-id="${copy.id}"] [data-testid="template-duplicate"]`).click();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:templates")).length === 4);
+  const dup = (await stored("msd:templates"))[3];
+  check(dup.name === "Chapitre (copie)" && dup.slides.length === 2 && dup.slides[0].id !== edited.slides[0].id, "« Dupliquer » crée une copie indépendante");
+  await page.locator(`[data-template-id="${dup.id}"] [data-testid="template-delete"]`).click();
+  await confirmDialog();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("msd:templates")).length === 3);
+  check(true, "un modèle du staff se supprime");
+  await page.click('[data-testid="templates-filter-deck"]');
+  check((await page.locator('[data-testid="admin-templates"] [data-template-id]').evaluateAll((n) => n.length)) >= 2 && (await page.locator(`[data-template-id="${copy.id}"]`).count()) === 0, "le filtre Présentations n'affiche que les présentations");
+  await page.click('[data-testid="templates-filter-all"]');
+
+  // Sans rôle staff, l'éditeur de modèle est fermé.
+  await page.evaluate(() => localStorage.setItem("msd:staff", "0"));
+  await page.goto(`${BASE}/modele/${copy.id}`, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="template-denied"]');
+  check(true, "sans rôle staff, un modèle ne s'ouvre pas dans l'éditeur");
+  await page.evaluate(() => localStorage.setItem("msd:staff", "1"));
+  // L'original revient si on le restaure ; la copie reste.
+  await page.goto(`${BASE}/admin?onglet=modeles`, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="admin-templates"]');
+  await page.click('[data-testid="deleted-builtins"] summary');
+  await page.click('[data-restore="b:modele-chapitre"]');
+  await page.waitForSelector('[data-template-id="b:modele-chapitre"]');
+  check((await page.locator(`[data-template-id="${copy.id}"]`).count()) === 1, "l'original se restaure, la copie modifiée reste");
+
   /* ───────────── 14. Exemples ───────────── */
   section("Exemples");
   const examplesStored = () => stored("msd:examples").then((l) => l || []);
@@ -791,7 +865,7 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   console.log(`\n${passed} vérifications réussies, ${failures} échec(s).`);
   process.exit(failures ? 1 : 0);
 })().catch((e) => {
-  console.error("\nLe parcours s'est arrêté :", e.message.split("\n")[0]);
+  console.error("\nLe parcours s'est arrêté :", process.env.E2E_DEBUG ? e.message : e.message.split("\n")[0]);
   console.error(`${passed} vérifications réussies avant l'arrêt, ${failures} échec(s).`);
   process.exit(1);
 });

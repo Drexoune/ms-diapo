@@ -15,6 +15,7 @@ import { SlidesPanel } from "./SlidesPanel";
 import { TemplatesModal } from "./TemplatesModal";
 import { Toolbar } from "./Toolbar";
 import { TopBar } from "./TopBar";
+import { TemplateBar } from "./TemplateBar";
 import { useApp } from "@/lib/app";
 import { startTour } from "@/lib/tour";
 import { data } from "@/lib/backend";
@@ -44,6 +45,8 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
   const router = useRouter();
   const { profile, loading, assets, toast } = useApp();
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
+  /** Type et catégorie du modèle ouvert (mode modèle seulement). */
+  const [tmpl, setTmpl] = useState<Pick<Template, "id" | "kind" | "category"> | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [presenting, setPresenting] = useState<number | null>(null);
   const [category, setCategory] = useState<AssetCategory>("titres");
@@ -64,13 +67,18 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
       router.replace("/");
       return;
     }
+    // Les modèles ne se modifient que par le staff (la base le refuserait de toute façon).
+    if (docKind === "template" && !profile.isStaff) return;
     let cancelled = false;
     (async () => {
       try {
         const doc =
           docKind === "deck"
             ? await data.getDeck(docId)
-            : await data.getTemplate(docId).then((t) => (t ? { title: t.name, slides: resolveAvatarInSlides(t.slides, avatar) } : null));
+            : await data.getTemplate(docId).then((t) => {
+                if (t) setTmpl({ id: t.id, kind: t.kind, category: t.category });
+                return t ? { title: t.name, slides: resolveAvatarInSlides(t.slides, avatar) } : null;
+              });
         if (cancelled) return;
         if (!doc) {
           setStatus("missing");
@@ -464,6 +472,18 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
 
   /* ───────────── Rendu ───────────── */
 
+  if (!loading && docKind === "template" && profile && !profile.isStaff) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center" data-testid="template-denied">
+        <h1 className="display text-[30px]">Réservé au staff</h1>
+        <p className="max-w-md text-[16px] font-semibold text-muted">Les modèles se modifient depuis le panel admin, avec le rôle staff.</p>
+        <Link href="/" className="nb-btn sun">
+          Retour à mes présentations
+        </Link>
+      </div>
+    );
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="flex h-full items-center justify-center gap-3 text-[18px] font-extrabold">
@@ -489,6 +509,7 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
     <div className="flex h-full min-h-[640px] min-w-[1180px] flex-col gap-3.5 p-3.5" data-testid="editor">
       <TopBar
         docLabel={docKind === "deck" ? "de ta présentation" : "du modèle"}
+        back={docKind === "template" ? { href: "/admin?onglet=modeles", label: "Retour aux modèles (panel admin)" } : undefined}
         onAddText={addText}
         onAddShape={addShape}
         onAddImages={(files) => addImages(files)}
@@ -497,6 +518,10 @@ export function EditorScreen({ docKind, docId }: { docKind: "deck" | "template";
         onPresent={present}
         onRetrySave={() => flush.current()}
       />
+
+      {docKind === "template" && tmpl && (
+        <TemplateBar meta={tmpl} onMetaChange={(patch) => setTmpl((m) => (m ? { ...m, ...patch } : m))} onFlush={() => flush.current()} />
+      )}
 
       <div className="flex min-h-0 flex-1 gap-3.5">
         <SlidesPanel />

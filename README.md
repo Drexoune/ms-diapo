@@ -86,6 +86,10 @@ Depuis le panel admin, « Modifier » permet aussi de **réordonner** les pages 
 
 ## Panel admin : éléments et modèles
 
+**Éditeur de modèles.** Dans l'onglet Modèles, « Modifier » (ou un clic sur la miniature) ouvre le modèle dans l'éditeur de diapos du site : ajouter, retirer, réordonner des diapos, changer textes, images, fonds, tout s'enregistre au fil de l'eau pour tout le monde. Un bandeau violet rappelle qu'on modifie un modèle et permet d'en changer le **type** (une diapo ou une présentation) et la **catégorie** ; « Terminer » (ou le logo) ramène au panel. On peut aussi **créer** un modèle (vierge, ou à partir d'une de ses présentations), le **dupliquer**, le **renommer** et le **supprimer**, et filtrer la liste (diapos, présentations, recherche par nom).
+
+Les modèles du pack de départ sont fournis par l'application : « Modifier » sur l'un d'eux crée une copie modifiable qui prend sa place, au même rang, et met l'original de côté (récupérable en bas de l'onglet). Seul le staff peut ouvrir un modèle dans l'éditeur.
+
 Chaque élément de la bibliothèque et chaque modèle — ceux ajoutés par le staff comme ceux du pack de départ — peut être **renommé** ou **supprimé** pour tout le monde. Les éléments qui contiennent du texte ont aussi un bouton **Textes** : on y réécrit chaque texte du bloc en le tapant, avec un aperçu en direct ; la mise en forme (police, couleurs, mots colorés, position) est conservée. Le pack de départ étant fourni par l'application, un élément du pack supprimé reste récupérable en bas de l'onglet (« supprimés — restaurer »), et un élément renommé peut retrouver son nom d'origine.
 
 La conversion des PDF utilise [pdf.js](https://mozilla.github.io/pdf.js/) : ses fichiers sont copiés dans `public/pdfjs` par `scripts/copy-pdfjs.mjs`, lancé automatiquement après `npm install` et avant `dev`/`build` (le dossier n'est pas versionné).

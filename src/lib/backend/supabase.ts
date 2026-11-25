@@ -251,10 +251,10 @@ export const supabaseApi: DataApi = {
     return (data as TemplateRow | null) ?? null;
   },
 
-  async createTemplate(input): Promise<Template> {
+  async createTemplate({ sort, ...input }): Promise<Template> {
     const { data, error } = await getSupabase()
       .from("templates")
-      .insert({ ...input, sort: Math.floor(Date.now() / 1000) })
+      .insert({ ...input, sort: sort ?? Math.floor(Date.now() / 1000) })
       .select("id,kind,name,category,slides,sort")
       .single();
     if (error || !data) fail("Création du modèle impossible", error);

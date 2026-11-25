@@ -23,6 +23,7 @@ function ToolBtn({ icon, label, onClick, testId }: { icon: React.ReactNode; labe
 
 export function TopBar({
   docLabel,
+  back = { href: "/", label: "Retour à mes présentations" },
   onAddText,
   onAddShape,
   onAddImages,
@@ -33,6 +34,8 @@ export function TopBar({
 }: {
   /** « modèle » quand le staff modifie un modèle plutôt qu'une présentation. */
   docLabel: string;
+  /** Où mène le logo : l'accueil, ou le panel admin quand on modifie un modèle. */
+  back?: { href: string; label: string };
   onAddText: () => void;
   onAddShape: (shape: ShapeKind) => void;
   onAddImages: (files: File[]) => void;
@@ -50,7 +53,7 @@ export function TopBar({
 
   return (
     <header className="flex flex-none items-center gap-3 rounded-[22px] border-[3px] border-ink bg-sun px-3.5 py-2.5 shadow-[4px_5px_0_#111]" data-testid="topbar">
-      <Link href="/" className="flex h-[50px] w-[52px] flex-none items-center justify-center rounded-[14px] bg-ink" title="Retour à mes présentations" aria-label="Retour à mes présentations">
+      <Link href={back.href} className="flex h-[50px] w-[52px] flex-none items-center justify-center rounded-[14px] bg-ink" title={back.label} aria-label={back.label} data-testid="editor-back">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/library/ms-logo.png" alt="MS Creators" className="h-[42px] w-[46px] object-contain" />
       </Link>

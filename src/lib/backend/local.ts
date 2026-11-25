@@ -142,9 +142,9 @@ export const localApi: DataApi = {
   async getTemplate(id) {
     return read<Template[]>(K.templates, []).find((t) => t.id === id) ?? null;
   },
-  async createTemplate(input) {
+  async createTemplate({ sort, ...input }) {
     const templates = read<Template[]>(K.templates, []);
-    const template: Template = { id: uuid(), sort: 1000 + templates.length, ...input };
+    const template: Template = { id: uuid(), sort: sort ?? 1000 + templates.length, ...input };
     write(K.templates, [...templates, template]);
     return template;
   },

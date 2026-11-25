@@ -16,6 +16,8 @@ export interface NewTemplate {
   name: string;
   category: TemplateCategory;
   slides: Slide[];
+  /** Rang dans les galeries ; par défaut, après tous les autres. Une copie d'un modèle du pack reprend son rang. */
+  sort?: number;
 }
 
 export interface NewExample {
@@ -67,7 +69,7 @@ export interface DataApi {
   listTemplates(): Promise<Template[]>;
   getTemplate(id: string): Promise<Template | null>;
   createTemplate(input: NewTemplate): Promise<Template>;
-  updateTemplate(id: string, patch: Partial<Pick<Template, "name" | "category" | "slides">>): Promise<void>;
+  updateTemplate(id: string, patch: Partial<Pick<Template, "name" | "category" | "slides" | "kind">>): Promise<void>;
   deleteTemplate(id: string): Promise<void>;
 
   /** Identifiants des éléments du pack de départ masqués par le staff. */
