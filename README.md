@@ -4,7 +4,8 @@ L'éditeur de diapos de [MS Creators](https://ms-creators.com). On choisit un mo
 
 - **Éditeur** : textes à contour épais, étiquettes, cartes, images, formes ; glisser-déposer, guides d'alignement, annuler/rétablir, enregistrement automatique.
 - **Bibliothèque d'éléments** : titres, étiquettes (dont les badges doré, cuivré et vert, au texte en dégradé), listes, cartes, photos, stickers, fonds — un clic ou un glisser pour les poser sur la diapo. Tous les textes s'écrivent au double-clic, et les fonds suivent : un badge ou une pastille s'élargit avec son texte, une étiquette ou une carte s'allonge, et ce qui est dessous dans le même bloc descend d'autant. Aucune lettre ne déborde.
-- **Modèles** : des diapos et des présentations complètes prêtes à remplir.
+- **Modèles** : des diapos et des présentations complètes prêtes à remplir, dont « Gagner de l'argent avec TikTok » (28 diapos reconstruites d'après la présentation de CL3O : textes modifiables, captures remplaçables).
+- **Partir de zéro** : la première diapo vient de l'élément « Slide d'ouverture » de la bibliothèque (badge doré au nom de la personne, grand titre). Le staff la change en réécrivant les textes de cet élément, ou en ajoutant à la bibliothèque un élément (ou une image, qui devient le fond) du même nom.
 - **Exemples** : d'anciennes présentations MS, déposées par le staff (PDF, images, ou présentation faite dans l'app), que tout le monde peut feuilleter page par page et télécharger en PDF — depuis l'accueil comme depuis l'éditeur.
 - **Visite guidée** : à la première connexion, un projecteur présente les outils un à un, de l'accueil à l'éditeur, jusqu'au bouton Aide. Elle se relance depuis l'aide ou le bouton « Visite guidée » de l'accueil.
 - **Mode invité** : « Essayer sans compte » ouvre l'éditeur sans Discord ; les présentations restent alors dans le navigateur.

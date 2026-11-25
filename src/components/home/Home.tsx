@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Compass, Copy, FilePlus2, Loader2, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react";
@@ -12,7 +12,7 @@ import { data, enterGuest } from "@/lib/backend";
 import { isOnboardedHere, setLocalStaff } from "@/lib/backend/local";
 import { startTour, useTour } from "@/lib/tour";
 import { cloneSlides } from "@/lib/ids";
-import { STARTER_TEMPLATES, firstSlide, resolveAvatarInSlides } from "@/lib/starter";
+import { STARTER_TEMPLATES, openingSlide, resolveAvatarInSlides } from "@/lib/starter";
 import type { DeckMeta, Slide } from "@/lib/types";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Une erreur est survenue");
@@ -130,7 +130,7 @@ function ago(iso: string): string {
 
 function Dashboard() {
   const router = useRouter();
-  const { profile, templates, toast, refreshProfile } = useApp();
+  const { profile, templates, assets, toast, refreshProfile } = useApp();
   const [decks, setDecks] = useState<DeckMeta[] | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<DeckMeta | null>(null);
@@ -196,7 +196,8 @@ function Dashboard() {
 
   const avatar = profile?.avatarUrl ?? null;
   const deckTemplates = templates.filter((t) => t.kind === "deck");
-  const blank = resolveAvatarInSlides([firstSlide()], avatar);
+  // « Partir de zéro » : la diapo d'ouverture vient de l'élément « Slide d'ouverture » de la bibliothèque.
+  const blank = useMemo(() => resolveAvatarInSlides([openingSlide(assets)], avatar), [assets, avatar]);
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[1280px] flex-col gap-7 px-5 py-6">

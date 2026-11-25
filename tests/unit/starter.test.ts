@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { AVATAR_TOKEN, DEFAULT_AVATAR, STARTER_ASSETS, STARTER_TEMPLATES, resolveAvatarInSlides, tokenizeAvatarInSlides } from "@/lib/starter";
+import { AVATAR_TOKEN, DEFAULT_AVATAR, OPENING_ASSET_NAME, STARTER_ASSETS, STARTER_TEMPLATES, openingSlide, resolveAvatarInSlides, tokenizeAvatarInSlides } from "@/lib/starter";
 import { FONTS } from "@/lib/fonts";
 import { safeHtml } from "@/lib/text";
 import { ASSET_CATEGORIES, SLIDE_H, SLIDE_W, TEMPLATE_CATEGORIES, type El } from "@/lib/types";
@@ -77,5 +77,43 @@ describe("jeton d'avatar", () => {
       const roundTrip = tokenizeAvatarInSlides(resolveAvatarInSlides(slides, avatar), avatar);
       expect(roundTrip).toEqual(slides);
     }
+  });
+});
+
+describe("« Partir de zéro » et la diapo d'ouverture", () => {
+  const builtin = STARTER_ASSETS.find((a) => a.id === "b:slide-ouverture")!;
+  const texts = (s: ReturnType<typeof openingSlide>) => s.els.filter((e) => e.type === "text").map((e) => (e.type === "text" ? e.html : ""));
+
+  it("le pack contient l'élément « Slide d'ouverture » : badge doré + grand titre", () => {
+    expect(builtin.name).toBe(OPENING_ASSET_NAME);
+    expect(builtin.elements!.map((e) => (e.type === "text" ? e.font : e.type))).toEqual(["etiquette", "titre-etroit"]);
+  });
+
+  it("la première diapo reprend cet élément, tel que le staff l'a réécrit", () => {
+    const rewritten = { ...builtin, elements: builtin.elements!.map((e, i) => (i === 0 && e.type === "text" ? { ...e, html: "<div>Clément</div>" } : e)) };
+    const s = openingSlide([rewritten]);
+    expect(texts(s)[0]).toBe("<div>Clément</div>");
+    // Bloc centré en largeur, à la hauteur d'origine ; logo et bulle ajoutés.
+    const title = s.els[1];
+    expect(title.x + title.w / 2).toBeCloseTo(SLIDE_W / 2, 0);
+    expect(s.els.filter((e) => e.keep).length).toBe(2);
+  });
+
+  it("un élément du même nom ajouté par le staff passe avant celui du pack", () => {
+    const custom = { ...builtin, id: "x", builtin: false, name: "Slide d’ouverture", elements: [{ ...builtin.elements![1], html: "<div>Maison</div>" }] };
+    expect(texts(openingSlide([builtin, custom]))).toEqual(["<div>Maison</div>"]);
+  });
+
+  it("une image de ce nom devient le fond ; sans élément, la diapo d'origine", () => {
+    const image = { id: "i", category: "fonds" as const, name: OPENING_ASSET_NAME, tags: [], kind: "image" as const, url: "/x.png", width: 1920, height: 1080, sort: 0 };
+    expect(openingSlide([image]).bg).toEqual({ kind: "image", src: "/x.png" });
+    expect(texts(openingSlide([]))).toEqual(texts(openingSlide([builtin])));
+  });
+
+  it("le modèle « Gagner de l'argent avec TikTok » reprend les 28 pages du PDF", () => {
+    const t = STARTER_TEMPLATES.find((x) => x.id === "b:modele-argent-tiktok")!;
+    expect(t.kind).toBe("deck");
+    expect(t.slides).toHaveLength(28);
+    expect(t.slides.flatMap((s) => s.els).filter((e) => e.type === "image" && e.src.startsWith("/library/modeles/tiktok/")).length).toBe(32); // 30 captures, 2 billets
   });
 });

@@ -1,6 +1,7 @@
 import { GOLD_FILL, GOLD_TEXT, PALETTE, makeBox, makeImage, makeShape, makeText, type TextInit } from "./factory";
-import type { Asset, AssetCategory, Background, El, ImageEl, ShapeEl, Slide, Template, TemplateCategory, TextEl } from "./types";
+import { SLIDE_H, SLIDE_W, type Asset, type AssetCategory, type Background, type El, type ImageEl, type ShapeEl, type Slide, type Template, type TemplateCategory, type TextEl } from "./types";
 import { BADGE_PAD_X } from "./geometry";
+import { cloneEls, uid } from "./ids";
 
 /**
  * Pack de départ : éléments de bibliothèque et modèles fournis avec
@@ -152,8 +153,8 @@ addElements("etiquettes", "bandeau-dore", "Bandeau doré", ["bandeau", "doré", 
   gold("Une précision importante à garder en tête, sur une ou deux lignes", 0, 0, 1700, 46),
 ]);
 // Badges : texte en dégradé, ombres douces. Mesurés au pixel sur les maquettes MS (cadre 263 × 80).
-const badge = (fill: string, text: [string, string, string]): TextEl =>
-  t("Texte", 0, 0, 263, 62, {
+const badge = (fill: string, text: [string, string, string], label = "Texte", x = 0, y = 0): TextEl =>
+  t(label, x, y, 263, 62, {
     outlined: false,
     font: "etiquette",
     h: 80,
@@ -167,7 +168,9 @@ const badge = (fill: string, text: [string, string, string]): TextEl =>
     hug: true,
     box: makeBox({ fill, radius: 7, border: 0, shadow: 0, padX: BADGE_PAD_X, padY: 0, soft: { y: 4, blur: 4, opacity: 0.25 } }),
   });
-addElements("etiquettes", "badge-dore", "Badge doré", ["badge", "doré", "or", "étiquette"], [badge("rgba(128, 106, 0, 0.69)", ["#d1ab54", "#ffeb87", "#d3ad55"])]);
+const BADGE_DORE = ["rgba(128, 106, 0, 0.69)", ["#d1ab54", "#ffeb87", "#d3ad55"]] as const;
+const badgeDore = (label?: string, x?: number, y?: number) => badge(BADGE_DORE[0], [...BADGE_DORE[1]], label, x, y);
+addElements("etiquettes", "badge-dore", "Badge doré", ["badge", "doré", "or", "étiquette"], [badgeDore()]);
 addElements("etiquettes", "badge-cuivre", "Badge cuivré", ["badge", "cuivre", "marron", "étiquette"], [badge("#725432", ["#9e6a30", "#d89346", "#a06b30"])]);
 addElements("etiquettes", "badge-vert", "Badge vert", ["badge", "vert", "étiquette"], [badge("#defff0", ["#24784b", "#43b379", "#267a4d"])]);
 addElements("etiquettes", "pastille", "Pastille noire", ["pastille", "tag", "pdf"], [pill("PDF", 0, 0, 130)]);
@@ -294,6 +297,13 @@ for (const [id, name, tags] of [
   addImage("fonds", `fond-${id}`, name, [...tags], `/library/fonds/${id}.svg`, 1920, 1080);
 }
 
+/* Diapo d'ouverture : badge doré au nom de la personne, grand titre sur deux lignes (d'après les présentations MS). */
+const OPENING_TOP = 363;
+function openingEls(name = "Ton nom", title = "Titre de la\nprésentation"): El[] {
+  return [badgeDore(name, 960 - 263 / 2, OPENING_TOP), t(title, 110, 444, 1700, 120, { lh: 0.94, font: "titre-etroit" })];
+}
+addElements("titres", "slide-ouverture", "Slide d'ouverture", ["ouverture", "titre", "nom", "diapo", "départ"], grouped(openingEls()));
+
 export const STARTER_ASSETS: Asset[] = assets;
 
 /* ───────────── Modèles de diapos ───────────── */
@@ -302,7 +312,7 @@ const TITLE_Y = 88;
 const heading = (text: string, size = 100) => t(text, 110, TITLE_Y, 1700, size);
 
 const slides = {
-  ouverture: () => slide(BG.or, [gold("Ton nom", 610, 338, 700, 56), t("Titre de la\nprésentation", 110, 452, 1700, 132, { lh: 1 })]),
+  ouverture: () => slide(BG.or, openingEls()),
 
   quiSuisJe: () =>
     slide(BG.creme, [
@@ -551,10 +561,241 @@ addDeckTemplate("deck-formation", "Formation complète", [
 addDeckTemplate("deck-planning", "Planning du mois", [slides.ouverture, slides.planning4, slides.planning6, slides.annonce, slides.podium, slides.aidezNous]);
 addDeckTemplate("deck-express", "Présentation express", [slides.ouverture, slides.sommaire, slides.titreTexte, slides.imageTexte, slides.questions]);
 
+/* ───────────── Modèle « Gagner de l'argent avec TikTok » ─────────────
+ * Reconstruit d'après la présentation PDF de CL3O (28 diapos), aux
+ * positions mesurées dans le PDF : chaque texte reste modifiable, les
+ * captures d'écran sont des images remplaçables (glisser une image dessus).
+ */
+
+const TK = "/library/modeles/tiktok/";
+/** Texte posé d'après le PDF : `top` est le haut de la première ligne ; interligne 1 comme dans le PDF. */
+const pt = (text: string, x: number, top: number, w: number, size: number, extra: TextInit = {}): TextEl =>
+  t(text, x, top + PT_DY * size, w, size, { lh: 1, font: "titre-etroit", ...extra });
+/** Décalage entre le haut d'une ligne dans le PDF et celui du cadre de texte (mesuré sur l'encre). */
+const PT_DY = 0.19;
+const ptl = (text: string, x: number, top: number, w: number, size: number, extra: TextInit = {}) => pt(text, x, top, w, size, { align: "left", ...extra });
+/** Centré sur `cx`. */
+const ptc = (text: string, cx: number, top: number, w: number, size: number, extra: TextInit = {}) => pt(text, cx - w / 2, top, w, size, extra);
+/** Liste à puces : `textX` est le début du texte des puces, `right` le bord droit. */
+const plist = (lines: string[], textX: number, top: number, right: number, size: number, extra: TextInit = {}) => {
+  const x = textX - 1.2 * size;
+  return pt("", x, top, right - x, size, { align: "left", list: true, html: lines.map((l) => `<div>${l}</div>`).join(""), ...extra });
+};
+/** Capture d'écran encadrée, ombre dure comme dans le PDF. */
+const shotImg = (file: string, x: number, y: number, w: number, h: number, shadow = 18) => img(TK + file, x, y, w, h, { radius: 14, border: 9, shadow });
+const tk = (els: El[]) => slide(BG.creme, els);
+
+const tiktok: (() => Slide)[] = [
+  () => slide(BG.or, openingEls("cl3o", "Gagner de l’argent\navec TikTok")),
+  () =>
+    tk([
+      ptl("Présentation", 108, 84, 860, 96),
+      ptl("Je suis cl3o.\n\nYouTubeur/TikTokeur à\n+100K abonnés cumulés.", 108, 226, 820, 52),
+      plist(["+120M vues totales.", "Beaucoup d’xp TikTok", "3 vidéos par jour sur<br>TikTok", "16 en tout sur toutes<br>les plateformes", "Je vis de la création de<br>contenu"], 186, 434, 960, 52),
+      img(AVATAR_TOKEN, 960, 71, 519, 519, { radius: 14, border: 9, shadow: 18 }),
+      shotImg("p02-2.webp", 1304, 415, 422, 514),
+    ]),
+  () =>
+    tk([
+      ptl("Sommaire", 217, 84, 700, 96),
+      ptl("On va voir :", 217, 280, 700, 52),
+      plist(
+        ["Comment fonctionne l’algo", "Les 9 manières de gagner de l’argent sur TikTok.", "Récompenses supplémentaires.", "Optimiser son rpm.", "Comment scale à l’inter.", "Les soucis que vous pouvez rencontrer."],
+        295,
+        332,
+        1840,
+        52,
+      ),
+    ]),
+  () =>
+    tk([
+      ptl("Comment fonctionne l’algo", 165, 84, 1700, 96),
+      ptl("Un peu une boîte de Pandore\nmais on sait quand même des choses", 165, 278, 1300, 52),
+      ptl("Imaginaire : interaction", 165, 443, 900, 52),
+      ptl("→ vrai mais pas que", 165, 495, 700, 45),
+    ]),
+  () =>
+    tk([
+      ptc("La métrique la plus importante :\nle hook et les premières secondes !", 960, 26, 1780, 80),
+      shotImg("p05-1.webp", 145, 283, 519, 519),
+      shotImg("p05-2.webp", 701, 283, 519, 519),
+      shotImg("p05-3.webp", 1257, 283, 519, 519),
+      ptc("500K", 404, 821, 500, 64),
+      ptc("70K en 24H", 960, 821, 500, 64),
+      ptc("75K", 1516, 821, 500, 64),
+    ]),
+  () =>
+    tk([
+      shotImg("p06-1.webp", 99, 234, 519, 519),
+      shotImg("p06-2.webp", 655, 234, 519, 519),
+      shotImg("p06-3.webp", 1211, 234, 519, 519),
+      ptc("7K", 359, 772, 500, 64),
+      ptc("17K", 914, 772, 500, 64),
+      ptc("17K", 1470, 772, 500, 64),
+    ]),
+  () => tk([ptc("À vous de jouer : devinez !", 960, 66, 1600, 80), shotImg("p07-1.webp", 700, 226, 519, 519), ptc("???", 960, 771, 500, 80)]),
+  () => tk([ptc("À vous de jouer : devinez !", 960, 66, 1600, 80), shotImg("p08-1.webp", 699, 226, 519, 519), ptc("75K", 960, 771, 500, 80)]),
+  () => tk([ptl("Beaucoup de choses\nrentrent en jeu\nmais safe de se\nfocus sur le hook", 120, 300, 1000, 80), shotImg("p09-1.webp", 1156, 22, 519, 1035)]),
+  () =>
+    tk([
+      img(TK + "billet-1.webp", 73, 30, 211, 231, { fit: "contain" }),
+      img(TK + "billet-2.webp", 1667, 35, 241, 239, { fit: "contain" }),
+      ptc("Comment être monétisé", 960, 43, 1400, 96),
+      ptc("10K abonnés et 100K vues\ndemande acceptée en quelques jours", 957, 197, 1800, 75),
+      ptl("9 manières de gagner de l’argent sur TikTok", 243, 420, 1500, 55),
+      plist(
+        [
+          "Cadeau en commentaire ou en live",
+          "Abonnement",
+          "Campagne musicale",
+          "Opé",
+          "TikTok Shop",
+          "Creator market place",
+          "Récompenses standard vidéo +1min",
+          "Récompenses supp",
+          "Récompenses spécialisées",
+        ],
+        326,
+        475,
+        1700,
+        55,
+      ),
+    ]),
+  () => tk([ptl("Cadeaux en commentaires\nou en live", 223, 17, 1600, 96), shotImg("p11-1.webp", 302, 310, 647, 519), shotImg("p11-2.webp", 1057, 149, 470, 886)]),
+  () => tk([ptc("Opé", 960, 445, 900, 96)]),
+  () => tk([ptl("Abonnements", 234, 53, 900, 96), shotImg("p13-1.webp", 302, 257, 647, 608), shotImg("p13-2.webp", 1168, 97, 445, 886)]),
+  () => tk([ptl("Campagnes\nmusicales", 260, 80, 760, 96), shotImg("p14-1.webp", 1069, 97, 447, 886)]),
+  () =>
+    tk([
+      ptl("TikTok Shop", 260, 128, 760, 96),
+      plist(["Affiliation"], 297, 406, 1000, 80),
+      plist(["Vendre vos"], 297, 502, 1000, 80),
+      // Comme dans le PDF : la suite repart sous la puce, pour ne pas passer sous la capture.
+      ptl("propres produits", 207, 582, 850, 80),
+      shotImg("p15-1.webp", 1069, 116, 447, 897),
+    ]),
+  () => tk([ptl("Creator\nmarket place", 169, 99, 880, 96), shotImg("p16-1.webp", 1069, 116, 447, 897)]),
+  () =>
+    tk([
+      ptl("Récompenses standard vidéo +1min\nrécompenses supplémentaires", 72, 8, 1800, 82),
+      shotImg("p17-1.webp", 428, 233, 410, 784),
+      shotImg("p17-2.webp", 1116, 224, 414, 801),
+    ]),
+  () =>
+    tk([
+      ptl("Comment les avoir ?", 72, 49, 1100, 82),
+      plist(["Qualité du contenu", "Valeur commerciale", "Watch time", "Être niché"], 145, 317, 1120, 72),
+      shotImg("p18-1.webp", 1193, 64, 475, 938),
+    ]),
+  () =>
+    tk([
+      ptc("Calcul final", 958, 51, 900, 82),
+      ptc("Vues éligibles x rpm standard x multiplicateur récompenses supp", 960, 162, 1900, 47),
+      shotImg("p19-1.webp", 651, 262, 618, 742),
+    ]),
+  () =>
+    tk([
+      ptc("Le RPM fluctue énormément", 960, 51, 1500, 82),
+      shotImg("p20-1.webp", 306, 196, 414, 801, 11),
+      shotImg("p20-2.webp", 753, 196, 414, 801, 11),
+      shotImg("p20-3.webp", 1200, 196, 414, 801, 11),
+    ]),
+  () =>
+    tk([
+      ptl("Comment optimiser son RPM", 72, 49, 1400, 82),
+      plist(["Changer de plan<br>régulièrement"], 223, 260, 1160, 70),
+      plist(["Faire du contenu<br>éducation (rege)"], 223, 470, 1160, 70),
+      plist(["WT (pertinent si vidéo<br>+2-3min)"], 223, 680, 1180, 70),
+      shotImg("p21-1.webp", 1219, 167, 429, 868),
+    ]),
+  () =>
+    tk([
+      ptl("Récompenses spécialisées", 72, 49, 1400, 82),
+      shotImg("p22-1.webp", 314, 167, 429, 868),
+      shotImg("p22-2.webp", 795, 167, 429, 868),
+      ptl("X2 sur ton RPM", 1276, 319, 620, 60),
+      ptl("Niche film/série\nsport", 1276, 439, 620, 60),
+      ptl("Éducation santé\naux US", 1276, 619, 620, 60),
+    ]),
+  () => tk([ptc("Récompenses spécialisées", 960, 271, 1400, 82), ptc("On ne sait rien.", 960, 499, 900, 60)]),
+  () =>
+    tk([
+      ptc("Récompenses spécialisées", 960, 49, 1400, 82),
+      shotImg("p24-1.webp", 352, 180, 673, 758),
+      ptl("Bien développé\naux US", 1062, 469, 800, 60),
+      ptl("Théorie ??", 1062, 645, 800, 60),
+      ptc("@rege", 688, 961, 500, 60),
+    ]),
+  () =>
+    tk([
+      ptl("Pendant ce temps aux US", 72, 49, 1400, 82),
+      shotImg("p25-1.webp", 314, 167, 429, 868),
+      shotImg("p25-2.webp", 795, 167, 429, 868),
+      ptl("Comment avoir\naccès au RPM et au\nchallenge US ??", 1276, 397, 630, 53),
+      ptl("Scale aux US ??", 1276, 609, 630, 53),
+    ]),
+  () =>
+    tk([
+      ptc("Proxys", 960, 48, 900, 82),
+      ptc("Ça permet de faire croire à son téléphone\nqu’on est dans un autre pays\n!= VPN", 960, 189, 1880, 72),
+      plist(["Copier son contenu ailleurs", "Toucher une meilleure monétisation", "Avoir les récompenses spécialisées", "Faire les challenges US"], 342, 505, 1800, 63),
+    ]),
+  () =>
+    tk([
+      ptc("Proxys", 960, 48, 900, 82),
+      plist(["Étapes :"], 169, 277, 800, 63),
+      plist(
+        [
+          "Nouveau téléphone",
+          "Télécharge Shadowrocket payant",
+          "Achète un proxy sur iproyal par exemple",
+          "Configure-le sur Shadowrocket sur ton<br>nouveau tél",
+          "Créer un compte TikTok",
+          "Boom",
+        ],
+        287,
+        340,
+        1880,
+        63,
+      ),
+    ]),
+  () => tk([ptc("Des questions ?", 960, 432, 1200, 82)]),
+];
+addDeckTemplate("argent-tiktok", "Gagner de l’argent avec TikTok", tiktok);
+
 export const STARTER_TEMPLATES: Template[] = templates;
 
 /** Diapo d'une présentation vierge : fond crème, logo et bulle déjà en place. */
 export function firstSlide(): Slide {
+  return slides.ouverture();
+}
+
+/** Nom de l'élément de bibliothèque qui sert de première diapo à « Partir de zéro ». */
+export const OPENING_ASSET_NAME = "Slide d'ouverture";
+const sameName = (a: string, b: string) => a.trim().toLowerCase().replace(/’/g, "'") === b.trim().toLowerCase().replace(/’/g, "'");
+
+/**
+ * Première diapo d'une présentation « partie de zéro » : fond doré, puis
+ * l'élément « Slide d'ouverture » de la bibliothèque tel que le staff l'a
+ * laissé (textes réécrits, ou élément du même nom ajouté par le staff, qui
+ * passe avant celui du pack). Une image de ce nom devient le fond de la diapo.
+ * Sans cet élément (supprimé), on revient à la diapo d'ouverture d'origine.
+ */
+export function openingSlide(library: Asset[] = []): Slide {
+  const found = library.filter((a) => sameName(a.name, OPENING_ASSET_NAME));
+  const asset = found.find((a) => !a.builtin) ?? found[0];
+  if (asset?.kind === "image" && asset.url) return { ...slide({ kind: "image", src: asset.url }, []), id: uid() };
+  if (asset?.kind === "elements" && asset.elements?.length) {
+    const els = asset.elements;
+    const x0 = Math.min(...els.map((e) => e.x));
+    const y0 = Math.min(...els.map((e) => e.y));
+    const w = Math.max(...els.map((e) => e.x + e.w)) - x0;
+    const h = Math.max(...els.map((e) => e.y + e.h)) - y0;
+    // Centré en largeur, à la hauteur de la diapo d'ouverture (ou centré s'il est plus haut).
+    const dx = (SLIDE_W - w) / 2 - x0;
+    const dy = Math.max(0, Math.min(OPENING_TOP, (SLIDE_H - h) / 2)) - y0;
+    return { ...slide(BG.or, cloneEls(els, dx, dy)), id: uid() };
+  }
   return slides.ouverture();
 }
 

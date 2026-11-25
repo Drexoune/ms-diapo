@@ -11,6 +11,7 @@ export const SLIDE_W = 1920;
 export const SLIDE_H = 1080;
 
 export type FontId =
+  | "titre-etroit"
   | "titre"
   | "etiquette"
   | "unbounded"

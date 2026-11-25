@@ -134,6 +134,10 @@ const near = (a, b, tol = 2) => Math.abs(a - b) <= tol;
   await page.waitForSelector('[data-testid="stage"] .el-text');
   check(/\/editor\/[0-9a-f-]{36}$/.test(page.url()), "la création ouvre l'éditeur");
   check((await els().count()) === 4, "la diapo d'ouverture contient nom, titre, logo et bulle", `${await els().count()} éléments`);
+  {
+    const first = (await storedDeck()).slides[0].els;
+    check(first[0].font === "etiquette" && first[0].hug && first[1].font === "titre-etroit", "« Partir de zéro » pose l'élément « Slide d'ouverture » : badge doré et grand titre");
+  }
 
   /* ───────────── 2. Sélection, édition de texte ───────────── */
   section("Texte");

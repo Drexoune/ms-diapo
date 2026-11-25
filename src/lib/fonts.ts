@@ -46,6 +46,23 @@ export const FONTS: FontDef[] = [
     ],
   },
   {
+    // Même police que « MS Titre », moins large : celle des présentations récentes
+    // (« Gagner de l'argent avec TikTok »), mesurée sur le PDF à 1 % près.
+    id: "titre-etroit",
+    label: "MS Titre étroit",
+    family: "MS Titre",
+    weight: 900,
+    stretch: "99%",
+    ls: -0.03,
+    ws: -0.05,
+    faceWeight: "100 900",
+    faceStretch: "62% 125%",
+    files: [
+      { url: "/fonts/archivo-latin-wdth-normal.woff2", range: LATIN },
+      { url: "/fonts/archivo-latin-ext-wdth-normal.woff2", range: LATIN_EXT },
+    ],
+  },
+  {
     // Même police que « MS Titre », à sa largeur normale et à peine resserrée :
     // c'est celle des étiquettes dorées, cuivrées et vertes (mesurée au pixel).
     id: "etiquette",
